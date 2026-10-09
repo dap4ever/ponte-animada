@@ -1,9 +1,132 @@
+<p align="center">
+  <img src="web/icon.svg" width="84" alt="Ícone do PonteAnimada">
+</p>
+
 # PonteAnimada
 
-Ponte entre o **Blender**, o **Kimodo** e **você**: os personagens 3D entram aqui (com ou
-sem esqueleto), as animações são geradas no Kimodo e aplicadas neles pelo Blender, e você
-valida cada uma nesta interface. Quando o personagem está completo, você o encerra e sai o
-resultado: um arquivo só, com todas as animações.
+Ferramenta local, para Windows, que leva um personagem 3D do arquivo cru até o arquivo pronto
+para o jogo, com todas as animações dentro. Ela é a **ponte** entre o **Blender** (que examina
+o personagem e aplica as animações nele), um **gerador de animação por texto** (o
+[Kimodo](https://github.com/nv-tlabs/kimodo), da NVIDIA) e **você**, que assiste a cada
+animação no navegador e aprova ou reprova.
+
+Os personagens entram com ou sem esqueleto. As animações são geradas no Kimodo, baixadas do
+Mixamo ou vêm de captura de movimento. O Blender as aplica no personagem e você valida cada
+uma. Quando o personagem está completo, você o encerra e sai o resultado: um arquivo só, com
+todas as animações.
+
+> *In English:* a local Windows tool (interface in Portuguese) that takes a 3D character from
+> raw file to a game-ready GLB/FBX with all its animations. Blender inspects, rigs and
+> retargets; motion comes from text-to-motion (Kimodo), Mixamo FBX or BVH mocap; a human
+> reviews every clip in the browser.
+
+![Tela de uma prévia: o boneco de teste andando, com os botões de validação e as medidas do retarget](docs/img/tela-previa.png)
+
+*A tela de uma prévia: a caminhada de exemplo aplicada no boneco de teste, com os botões de
+validação e as medidas do retarget à direita.*
+
+## O que ele faz
+
+- **Examina o personagem.** Aceita FBX, GLB, BLEND, OBJ ou um ZIP com o modelo e as texturas.
+  O Blender faz um laudo: tipo de esqueleto, ossos reconhecidos, pose de descanso, escala,
+  pesos e texturas.
+- **Riga quem chega sem esqueleto**, no padrão do Mixamo, a partir de 8 marcadores que você
+  ajusta na tela.
+- **Gera animação a partir de texto.** Um roteiro em inglês, escrito um passo de cada vez, com
+  transição entre os passos, laço, direção e caminho desenhado no chão.
+- **Aproveita animação pronta**: FBX do Mixamo e captura de movimento em BVH.
+- **Aplica a animação no personagem** (retarget), seja qual for o esqueleto dele. Reconhece os
+  nomes de osso mais comuns: Mixamo, Unreal, Unity, Blender, VRM e Biped.
+- **Mostra para validar.** Visualizador 3D no navegador, aprovar ou reprovar com notas, ajuste
+  de pose, arma e acessórios presos ao osso.
+- **Entrega um arquivo só.** GLB, FBX e BLEND com o personagem, as texturas, os acessórios e
+  todas as animações que você não reprovou. Como opção, mais um FBX no esqueleto do Mannequin,
+  para a Unreal 5.
+
+Tudo roda na sua máquina. Não há conta, nuvem nem banco de dados: o que a ponte sabe está em
+arquivos, na pasta `data/`.
+
+## Como funciona
+
+```mermaid
+flowchart LR
+    subgraph PERS["O personagem"]
+        P["Arquivo<br/>FBX, GLB, BLEND, OBJ ou ZIP"] --> L["Laudo<br/>(Blender)"]
+        L -- "sem esqueleto" --> R["Rig no padrão Mixamo<br/>(Blender)"]
+    end
+    subgraph ANIM["A animação"]
+        K["Kimodo<br/>texto em inglês"]
+        M["Mixamo<br/>FBX"]
+        C["Captura de movimento<br/>BVH"]
+    end
+    L -- "pronto para animar" --> T["Retarget<br/>(Blender)"]
+    R --> T
+    K --> T
+    M --> T
+    C --> T
+    T --> V["Prévia<br/>você aprova ou reprova"]
+    V -- "encerrar o personagem" --> F["Resultado<br/>GLB, FBX e BLEND"]
+```
+
+Uma prévia reprovada volta com as suas notas para quem gera a animação. Ao encerrar, o
+resultado pode levar também um FBX para a Unreal 5.
+
+## Estado do projeto
+
+Projeto pessoal, em uso, feito para levar personagens animados a um jogo na Godot. Vale saber
+antes de instalar:
+
+- **Windows.** Feito e usado no Windows 11. Os atalhos, os scripts de abrir e parar e a ligação
+  com o Kimodo (que roda no WSL) dependem dele. Em outro sistema não foi testado.
+- **O gerador de animação não vem junto.** O Kimodo é instalado à parte e pede uma máquina
+  forte (veja [Requisitos](#requisitos)). Sem gerador a ponte serve para todo o resto: receber
+  e rigar personagem, importar animação do Mixamo e captura, validar, ajustar e encerrar.
+- **Em português**: a interface, a linha de comando e as mensagens.
+- O que já foi conferido e o que ainda não foi está, sem enfeite, em
+  [Limites conhecidos](#limites-conhecidos).
+
+## Requisitos
+
+| Para | Precisa de |
+|---|---|
+| Rodar a ponte | Windows, [uv](https://docs.astral.sh/uv/) (ele baixa o Python sozinho), [Blender](https://www.blender.org/) 5.2 e [Node.js](https://nodejs.org/) (só para baixar o three.js) |
+| Abrir em janela própria | Microsoft Edge. Sem ele, a interface abre no navegador padrão |
+| Gerar com o Kimodo original | Docker Desktop, WSL 2 com Ubuntu e placa NVIDIA. O text encoder ocupa uns 17 GB de RAM; no disco, 35 GB da imagem do Docker e 17 GB de modelos |
+| Gerar com o kimodo.cpp | Visual Studio 2022 com CMake, para compilar, e uns 9 GB de pesos |
+| Arquivo para a Unreal 5 | só o Blender. A Unreal entra apenas se você quiser rodar o teste que importa nela |
+
+Os números do Kimodo foram medidos numa máquina com 32 GB de RAM e uma RTX 3060 de 12 GB.
+
+## Instalação
+
+```powershell
+git clone https://github.com/dap4ever/ponte-animada.git
+cd ponte-animada
+uv sync                     # o backend (cria o .venv)
+npm install --prefix web    # o three.js, servido direto de web/node_modules
+```
+
+Depois:
+
+1. Abra o `ponte.toml` e ponha em `[blender] exe` o caminho do `blender.exe` da sua máquina.
+2. Rode `uv run ponte serve` e abra <http://127.0.0.1:8765>.
+3. Se quiser um atalho na Área de Trabalho, rode uma vez
+   `powershell -ExecutionPolicy Bypass -File scripts\criar-atalho.ps1`.
+
+O `ponte.toml` vem com os geradores desligados. Para ligar um, veja
+[Geradores de animação](#geradores-de-animação).
+
+### Ver funcionando sem gerador
+
+O repositório traz um boneco de teste e uma caminhada de exemplo. Com eles dá para ver uma
+prévia na tela sem instalar o Kimodo:
+
+```powershell
+uv run ponte fixture        # cria o projeto "Boneco de teste" e mostra o id dele
+uv run ponte motion import <projeto> tests\fixtures\kimodo_walk_forward.bvh --label "Andar"
+uv run ponte retarget <projeto> <animacao>      # o id da animação sai no comando anterior
+uv run ponte serve
+```
 
 ## Abrir
 
@@ -11,6 +134,30 @@ Dê dois cliques no atalho **PonteAnimada** da Área de Trabalho (ou em `Abrir-P
 Ele sobe o servidor local e abre a interface numa janela própria. Para encerrar o servidor,
 use `Parar-PonteAnimada.cmd` (ele se recusa a parar enquanto houver animação sendo gerada
 ou aplicada). Se mover a pasta do projeto, rode `scripts\criar-atalho.ps1` para refazer o atalho.
+
+## Neste documento
+
+**Usar**
+
+- [Fluxo](#fluxo)
+- [Projetos, prévias e resultado](#projetos-prévias-e-resultado)
+- [Rigar aqui (padrão Mixamo)](#rigar-aqui-padrão-mixamo)
+- [Roteiro: uma animação com começo, meio e transições](#roteiro-uma-animação-com-começo-meio-e-transições)
+- [Animações do Mixamo](#animações-do-mixamo)
+- [Capturas de movimento (BVH)](#capturas-de-movimento-bvh)
+- [Ajustar a pose](#ajustar-a-pose)
+- [Arma e acessórios](#arma-e-acessórios)
+- [Texturas](#texturas)
+- [Unreal 5](#unreal-5)
+- [Linha de comando](#linha-de-comando)
+
+**Entender e mexer**
+
+- [Geradores de animação](#geradores-de-animação)
+- [Como é por dentro](#como-é-por-dentro)
+- [Testes](#testes)
+- [Limites conhecidos](#limites-conhecidos)
+- [Pastas](#pastas)
 
 ## Fluxo
 
@@ -32,8 +179,8 @@ Cada upload de personagem cria um projeto, e tudo que nasce dele fica dentro del
 animações, as prévias, os acessórios. A interface abre na tela de **Projetos**; abrir um
 projeto leva a uma tela só dele, com as abas *Prévias*, *Animações* e *Personagem* (o botão
 **←** volta aos projetos). O **×** no canto do cartão exclui o projeto, com confirmação: vão
-embora o personagem, as animações, as prévias e o resultado dele. Uma animação é sempre gerada para o personagem do projeto aberto
-e não é usada em outro.
+embora o personagem, as animações, as prévias e o resultado dele. Uma animação é sempre gerada
+para o personagem do projeto aberto e não é usada em outro.
 
 A **prévia** é a animação aplicada no personagem, para você validar. Ela não é a entrega.
 
@@ -46,9 +193,10 @@ que ainda não foram validadas entram, e o aviso de confirmação diz quantas s�
 
 O resultado aparece **fora da pasta do projeto, como atalho**: na seção **Resultados** da
 tela de projetos (e no alto da tela do projeto encerrado) e, no disco, em
-`data\resultados\<Nome do personagem>.lnk`, que abre a pasta com os arquivos. O projeto não fica travado: se mexer depois (animação nova, prévia reprovada, arma
-em outra posição), o resultado aparece como *desatualizado* e basta encerrar de novo.
-*Desfazer o encerramento* apaga o resultado e o atalho, e deixa o projeto como estava.
+`data\resultados\<Nome do personagem>.lnk`, que abre a pasta com os arquivos. O projeto não
+fica travado: se mexer depois (animação nova, prévia reprovada, arma em outra posição), o
+resultado aparece como *desatualizado* e basta encerrar de novo. *Desfazer o encerramento*
+apaga o resultado e o atalho, e deixa o projeto como estava.
 
 **Para a Unreal 5**: marque *Gerar também para a Unreal 5* antes de encerrar (ou
 `uv run ponte close <projeto> --unreal`). O resultado ganha `unreal5\SK_<nome>.fbx`: o mesmo
@@ -204,110 +352,6 @@ material marcado como transparente cuja textura tem o canal alfa todo opaco volt
 
 Prévias feitas antes de as texturas chegarem não mudam sozinhas: use *Refazer retarget*.
 
-## Regras fixas do Kimodo
-
-Estão travadas no código (`ponte/config.py` e `ponte/kimodo.py`), não em configuração:
-
-- **Sempre o mesmo esqueleto**: SOMA 77, modelo `Kimodo-SOMA-RP-v1.1`. Todo BVH que entra
-  é conferido contra a assinatura desse esqueleto e recusado se for diferente.
-- **Um pedido de cada vez**: nunca duas gerações ao mesmo tempo, para não sobrecarregar a
-  máquina. O que chega com outro gerando espera na fila e entra na ordem em que foi pedido,
-  valendo entre a interface e a linha de comando. As variações de um pedido saem uma depois
-  da outra, dentro da vez dele.
-
-O Kimodo liga sozinho quando você pede uma animação (na primeira vez do dia o text encoder
-leva uns 5 minutos carregando). Ligado, ele ocupa ~17 GB de RAM: o botão **Desligar** no
-topo da interface libera.
-
-## Dois geradores: Kimodo original e kimodo.cpp
-
-> Nesta máquina os dois foram desinstalados em 08/10/2026. Enquanto nenhum estiver instalado, a
-> ponte mostra "Nenhum gerador de animação instalado", não pergunta nada ao abrir e não gera;
-> importar, validar e encerrar continuam funcionando. Para reinstalar o original, siga
-> `docs/kimodo-setup/GUIA-KIMODO.md` e ponha `installed = true` em `[kimodo]`, no `ponte.toml`.
-
-Com pelo menos um instalado, ao abrir a ponte a primeira tela pergunta **qual gerador você vai usar**. Os dois rodam o
-mesmo modelo, no mesmo esqueleto, e a fila é uma só (um pedido de cada vez, somando os dois).
-Para trocar depois: *trocar gerador*, na barra de cima, ou `uv run ponte engine kimodo|cpp`.
-
-| | Kimodo original | kimodo.cpp |
-|---|---|---|
-| Onde roda | Docker dentro do WSL | direto no Windows (`D:\kimodo.cpp`) |
-| Laço, caminho e direção, força do gesto | sim | ainda não: a tela desliga esses controles |
-| Continuar um roteiro | parte do fim do clipe gravado | gera o roteiro inteiro de novo, com a mesma semente (o passo anterior sai igual) |
-| Refazer um passo | sai diferente a cada vez | com o mesmo texto sai igual: mude o texto |
-| Memória | o text encoder ocupa uns 17 GB de RAM enquanto ligado | carrega uns 9 GB de pesos a cada geração e solta ao terminar (uso de RAM não medido) |
-| Tempo para 5 s de animação | — | uns 3 min e meio (só processador) |
-
-O kimodo.cpp foi compilado sem Vulkan, então gera no processador. Um clipe gerado num não
-pode ser continuado no outro. Para instalar noutra máquina: clonar
-[kimodo.cpp](https://github.com/localai-org/kimodo.cpp) com o submódulo, compilar
-`kmd-generate` com o CMake do Visual Studio 2022, baixar os pesos com
-`scripts/download_gguf_weights.py --model soma-rp-v1.1` e apontar `[kimodo_cpp] repo` no
-`ponte.toml`.
-
-## Linha de comando
-
-É por onde as animações são feitas pelo backend. Tudo que ela faz aparece na interface.
-
-`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`).
-
-```powershell
-uv run ponte status                      # projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
-uv run ponte asset add personagem.fbx    # cria o projeto e faz o laudo
-uv run ponte asset add personagem.fbx --textures pasta_das_texturas
-uv run ponte asset textures <projeto> cor.png normal.png   # acrescenta texturas e refaz o laudo
-uv run ponte asset show <projeto>        # laudo e mapeamento de ossos
-# Roteiro, um passo de cada vez: gere, confira a prévia e só então o próximo, com --continue.
-uv run ponte gen "stands still, breathing." --premise "A zombie" --duration 6 --asset <projeto>
-uv run ponte gen "walks forward slowly." --premise "A zombie" --duration 5 --continue <animacao> --asset <projeto>
-# Refazer o último passo: parte da animação anterior e toma o lugar da que saiu errada.
-uv run ponte gen "shuffles forward." --premise "A zombie" --duration 5 --continue <anterior> --replace <errada> --asset <projeto>
-# Passo em laço (termina na pose em que começou); --text-weight para um gesto mais marcado.
-uv run ponte gen "sways from side to side." --premise "A zombie" --duration 6 --loop --text-weight 4 --continue <animacao> --asset <projeto>
-uv run ponte gen "..." --dry-run         # só confere que o roteiro monta; não gera nada
-uv run ponte retarget <projeto> <animacao> [--in-place]   # refaz a prévia
-uv run ponte close <projeto>             # encerra o personagem: monta o resultado e cria o atalho
-uv run ponte close <projeto> --unreal    # idem, e liga o arquivo para a Unreal 5 (--no-unreal desliga)
-uv run ponte reopen <projeto>            # desfaz o encerramento
-uv run ponte kimodo status|start|stop
-uv run ponte fixture                     # recria o boneco de teste
-```
-
-## Como o retarget funciona
-
-O Kimodo exporta BVH em T-pose padrão. Para cada osso mapeado do personagem, o Blender
-recebe a rotação **global** da junta correspondente do SOMA, corrigida pela diferença entre
-as poses de descanso (é o que resolve A-pose × T-pose). O deslocamento do quadril é escalado
-pela altura do quadril do personagem, para o tamanho da passada acompanhar o tamanho da perna.
-Detalhes em `blender/ponte_bl/retarget.py` e `blender/ponte_bl/rigmap.py`.
-
-Conferir depois de mexer no retarget:
-
-```powershell
-uv run python tests/check_rigmap.py      # nomes de ossos: Mixamo, Unreal, Unity, Blender, VRM, Biped, captura
-uv run python tests/check_retarget.py    # boneco de teste em 3 variantes + caminhada real do Kimodo
-uv run python tests/check_textures.py    # textura embutida, separada, solta e com falso alfa
-uv run python tests/check_bake.py        # ajuste de pose e arma: visualizador × arquivos do Blender
-uv run python tests/check_script_dry.py  # roteiro: os passos se encadeiam e o laço fecha (ensaio a seco, não gera)
-uv run python tests/check_chain.py       # um passo de cada vez: o clipe novo toma o lugar do que estende ou refaz
-uv run python tests/check_fila.py        # Kimodo: um pedido de cada vez, na ordem de chegada
-uv run python tests/check_mixamo.py      # animação em FBX: mesmo movimento do caminho direto, vira ação e sai no resultado
-uv run python tests/check_capture.py     # captura em BVH de outro esqueleto: mesmo movimento, laço fechado, vira ação e sai no resultado
-uv run python tests/check_engine.py      # os dois geradores: kimodo.cpp sai no SOMA 77, continua refazendo o roteiro, divide a fila com o original
-uv run python tests/check_close.py       # encerrar: resultado único igual às prévias, atalho fora do projeto
-uv run python tests/check_unreal.py      # Unreal 5: esqueleto do Mannequin, mesmas animações (--engine <UnrealEditor-Cmd.exe> importa de verdade)
-uv run python tests/check_migration.py   # acervo de versões antigas vai para as pastas de projeto
-uv run python tests/check_autorig.py <arquivo_do_mixamo.fbx>   # rigador × rig do próprio Mixamo
-```
-
-A geração usa `kimodo_scripts/gerar.py`, que roda dentro do container do Kimodo: cada passo
-do roteiro parte dos últimos quadros do anterior, com a trajetória de cada um, tudo com o
-modelo carregado uma vez. Para conferir uma animação com trajetória imposta:
-`blender --background --python blender/motion_stats.py -- <motion.bvh>`. Para conferir se cada
-passo entregou o gesto pedido (quanto andou, virou, balançou, e se o laço fecha):
-`blender --background --python blender/step_stats.py -- <pasta da animação>`.
-
 ## Unreal 5
 
 Com *Gerar também para a Unreal 5* ligado, o encerramento grava mais um arquivo,
@@ -351,6 +395,180 @@ O que saber:
   uma animação de 10 s): entrou na Unreal 5.8.3 com as texturas, 1,70 m de altura, sem avisos,
   e a animação com as juntas onde deviam estar. Tudo isso por número, sem interface: falta
   olhar na tela do editor e usar num projeto de jogo.
+
+## Linha de comando
+
+É por onde as animações são feitas pelo backend. Tudo que ela faz aparece na interface, e ela
+funciona mesmo com o servidor fora do ar. Rigar, ajustar a pose e posicionar acessórios são
+só pela interface.
+
+`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`).
+
+```powershell
+uv run ponte serve                       # a interface, em http://127.0.0.1:8765 (rotas da API em /api/docs)
+uv run ponte status                      # projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
+uv run ponte asset add personagem.fbx    # cria o projeto e faz o laudo
+uv run ponte asset add personagem.fbx --textures pasta_das_texturas
+uv run ponte asset textures <projeto> cor.png normal.png   # acrescenta texturas e refaz o laudo
+uv run ponte asset show <projeto>        # laudo e mapeamento de ossos
+# Roteiro, um passo de cada vez: gere, confira a prévia e só então o próximo, com --continue.
+uv run ponte gen "stands still, breathing." --premise "A zombie" --duration 6 --asset <projeto>
+uv run ponte gen "walks forward slowly." --premise "A zombie" --duration 5 --continue <animacao> --asset <projeto>
+# Refazer o último passo: parte da animação anterior e toma o lugar da que saiu errada.
+uv run ponte gen "shuffles forward." --premise "A zombie" --duration 5 --continue <anterior> --replace <errada> --asset <projeto>
+# Passo em laço (termina na pose em que começou); --text-weight para um gesto mais marcado.
+uv run ponte gen "sways from side to side." --premise "A zombie" --duration 6 --loop --text-weight 4 --continue <animacao> --asset <projeto>
+uv run ponte gen "..." --dry-run         # só confere que o roteiro monta; não gera nada
+# Animação pronta: FBX do Mixamo, captura em BVH, ou um BVH do Kimodo que já existe.
+uv run ponte motion import-fbx <projeto> "Zombie Idle.fbx"
+uv run ponte motion import-capture <projeto> captura.bvh --loop
+uv run ponte motion import <projeto> animacao.bvh
+uv run ponte motion list                 # as animações, com o id de cada uma
+uv run ponte motion label <animacao> --name "Reações" --steps "agitado" "vira"   # nome do roteiro e dos passos
+uv run ponte retarget <projeto> <animacao> [--in-place]   # refaz a prévia
+uv run ponte close <projeto>             # encerra o personagem: monta o resultado e cria o atalho
+uv run ponte close <projeto> --unreal    # idem, e liga o arquivo para a Unreal 5 (--no-unreal desliga)
+uv run ponte reopen <projeto>            # desfaz o encerramento
+uv run ponte kimodo status|start|stop
+uv run ponte engine [kimodo|cpp]         # mostra ou troca o gerador em uso
+uv run ponte fixture                     # recria o boneco de teste
+```
+
+## Geradores de animação
+
+A ponte não traz um gerador: ela chama um que esteja instalado na máquina. O `ponte.toml` do
+repositório vem com os dois desligados. Enquanto nenhum estiver instalado, a ponte mostra
+"Nenhum gerador de animação instalado", não pergunta nada ao abrir e não gera; importar,
+validar e encerrar continuam funcionando.
+
+- **Kimodo original**: siga [`docs/kimodo-setup/GUIA-KIMODO.md`](docs/kimodo-setup/GUIA-KIMODO.md)
+  (o registro de como ele foi instalado aqui, com os scripts ao lado) e ponha
+  `installed = true` em `[kimodo]`, no `ponte.toml`.
+- **kimodo.cpp**: clonar [kimodo.cpp](https://github.com/localai-org/kimodo.cpp) com o
+  submódulo, compilar `kmd-generate` com o CMake do Visual Studio 2022, baixar os pesos com
+  `scripts/download_gguf_weights.py --model soma-rp-v1.1` e apontar `[kimodo_cpp] repo` no
+  `ponte.toml`.
+
+### Regras fixas do Kimodo
+
+Estão travadas no código (`ponte/config.py` e `ponte/kimodo.py`), não em configuração:
+
+- **Sempre o mesmo esqueleto**: SOMA 77, modelo `Kimodo-SOMA-RP-v1.1`. Todo BVH que entra
+  é conferido contra a assinatura desse esqueleto e recusado se for diferente.
+- **Um pedido de cada vez**: nunca duas gerações ao mesmo tempo, para não sobrecarregar a
+  máquina. O que chega com outro gerando espera na fila e entra na ordem em que foi pedido,
+  valendo entre a interface e a linha de comando. As variações de um pedido saem uma depois
+  da outra, dentro da vez dele.
+
+O Kimodo liga sozinho quando você pede uma animação (na primeira vez do dia o text encoder
+leva uns 5 minutos carregando). Ligado, ele ocupa ~17 GB de RAM: o botão **Desligar** no
+topo da interface libera.
+
+### Dois geradores: Kimodo original e kimodo.cpp
+
+Com pelo menos um instalado, ao abrir a ponte a primeira tela pergunta **qual gerador você vai
+usar**. Os dois rodam o mesmo modelo, no mesmo esqueleto, e a fila é uma só (um pedido de cada
+vez, somando os dois). Para trocar depois: *trocar gerador*, na barra de cima, ou
+`uv run ponte engine kimodo|cpp`.
+
+| | Kimodo original | kimodo.cpp |
+|---|---|---|
+| Onde roda | Docker dentro do WSL | direto no Windows |
+| Laço, caminho e direção, força do gesto | sim | ainda não: a tela desliga esses controles |
+| Continuar um roteiro | parte do fim do clipe gravado | gera o roteiro inteiro de novo, com a mesma semente (o passo anterior sai igual) |
+| Refazer um passo | sai diferente a cada vez | com o mesmo texto sai igual: mude o texto |
+| Memória | o text encoder ocupa uns 17 GB de RAM enquanto ligado | carrega uns 9 GB de pesos a cada geração e solta ao terminar (uso de RAM não medido) |
+| Tempo para 5 s de animação | — | uns 3 min e meio (só processador) |
+
+O kimodo.cpp foi testado compilado sem Vulkan, então gerava no processador. Um clipe gerado
+num não pode ser continuado no outro.
+
+### ARDY (em teste)
+
+O [ARDY](https://github.com/nv-tlabs/ardy) é outro gerador da NVIDIA, em tempo real. Em
+`docs/ardy-setup/` estão os scripts usados para instalá-lo e testá-lo no Ubuntu do WSL:
+instalar, gerar um clipe, abrir o visualizador e o demo ao vivo, parar. **Ele ainda não está
+ligado à ponte**: o que ele gera não vira animação de um projeto.
+
+## Como é por dentro
+
+São três ambientes de Python que não se importam entre si. Conversam por argumentos e
+arquivos JSON:
+
+| Onde roda | Código | O que faz |
+|---|---|---|
+| venv do `uv`, no Windows | `ponte/` | o backend: guarda os registros, organiza a fila, chama o Blender e o gerador, serve a API e a linha de comando |
+| Python embutido do Blender | `blender/` | laudo, rig, retarget, acessórios, montagem do resultado, arquivo da Unreal 5 |
+| container do Kimodo, no WSL | `kimodo_scripts/gerar.py` | o roteiro: passos encadeados, transições, trajetória, laço |
+
+- **Camadas do backend**: `store` (registros em arquivo) → `pipeline` (as operações: laudo,
+  rig, gerar, retarget, encerrar) → `server` (FastAPI) e `cli`. A interface e a linha de
+  comando chamam as mesmas operações.
+- **Sem banco de dados**: o estado é o que está em `data/`, um `asset.json`, `motion.json` ou
+  `result.json` por pasta. Servidor e linha de comando leem e gravam os mesmos arquivos; é
+  assim que um vê o que o outro fez.
+- **Blender sem janela**: cada operação roda `blender --background --python blender/<script>`
+  e lê o JSON que o script grava. Os scripts de entrada ficam em `blender/*.py` e a lógica em
+  `blender/ponte_bl/`.
+- **Interface sem build**: `web/app.js` (as telas) e `web/viewer.js` (o visualizador, em
+  three.js), sem framework. A cada 2 s ela busca o estado inteiro em `GET /api/state` e
+  redesenha.
+- **Nomes**: o código e a API estão em inglês (`asset`, `motion`, `result`, `final`); a
+  interface e as pastas, em português (personagem, animação, prévia, resultado).
+- **Para testar sem tocar no seu acervo**, aponte a variável `PONTE_DATA` para outra pasta.
+  Vale para a linha de comando, para os testes e para um segundo servidor
+  (`uv run ponte serve --port 8766`).
+
+### Como o retarget funciona
+
+O Kimodo exporta BVH em T-pose padrão. Para cada osso mapeado do personagem, o Blender
+recebe a rotação **global** da junta correspondente do SOMA, corrigida pela diferença entre
+as poses de descanso (é o que resolve A-pose × T-pose). O deslocamento do quadril é escalado
+pela altura do quadril do personagem, para o tamanho da passada acompanhar o tamanho da perna.
+Detalhes em `blender/ponte_bl/retarget.py` e `blender/ponte_bl/rigmap.py`.
+
+A geração usa `kimodo_scripts/gerar.py`, que roda dentro do container do Kimodo: cada passo
+do roteiro parte dos últimos quadros do anterior, com a trajetória de cada um, tudo com o
+modelo carregado uma vez. Para conferir uma animação com trajetória imposta:
+`blender --background --python blender/motion_stats.py -- <motion.bvh>`. Para conferir se cada
+passo entregou o gesto pedido (quanto andou, virou, balançou, e se o laço fecha):
+`blender --background --python blender/step_stats.py -- <pasta da animação>`.
+
+## Testes
+
+Não há pytest. Cada teste é um script que roda sozinho, imprime `ok` ou `FALHA` por caso e
+sai com código 1 se algo falhou. Eles trabalham em pastas temporárias, sem tocar no seu
+acervo. A exceção é o `check_script_dry.py`, que usa `data/tmp`.
+
+```powershell
+uv run python tests/check_rigmap.py      # nomes de ossos: Mixamo, Unreal, Unity, Blender, VRM, Biped, captura
+uv run python tests/check_retarget.py    # boneco de teste em 3 variantes + caminhada real do Kimodo
+uv run python tests/check_textures.py    # textura embutida, separada, solta e com falso alfa
+uv run python tests/check_bake.py        # ajuste de pose e arma: visualizador × arquivos do Blender
+uv run python tests/check_script_dry.py  # roteiro: os passos se encadeiam e o laço fecha (ensaio a seco, não gera)
+uv run python tests/check_chain.py       # um passo de cada vez: o clipe novo toma o lugar do que estende ou refaz
+uv run python tests/check_fila.py        # Kimodo: um pedido de cada vez, na ordem de chegada
+uv run python tests/check_mixamo.py      # animação em FBX: mesmo movimento do caminho direto, vira ação e sai no resultado
+uv run python tests/check_capture.py     # captura em BVH de outro esqueleto: mesmo movimento, laço fechado, vira ação e sai no resultado
+uv run python tests/check_engine.py      # os dois geradores: kimodo.cpp sai no SOMA 77, continua refazendo o roteiro, divide a fila com o original
+uv run python tests/check_close.py       # encerrar: resultado único igual às prévias, atalho fora do projeto
+uv run python tests/check_unreal.py      # Unreal 5: esqueleto do Mannequin, mesmas animações (--engine <UnrealEditor-Cmd.exe> importa de verdade)
+uv run python tests/check_migration.py   # acervo de versões antigas vai para as pastas de projeto
+uv run python tests/check_autorig.py <arquivo_do_mixamo.fbx>   # rigador × rig do próprio Mixamo
+```
+
+| Teste | Precisa de |
+|---|---|
+| `check_rigmap.py`, `check_migration.py`, `check_fila.py` | só Python |
+| `check_retarget.py`, `check_textures.py`, `check_mixamo.py`, `check_capture.py`, `check_close.py` | Blender |
+| `check_chain.py`, `check_engine.py` | Blender (o gerador é trocado por um dublê) |
+| `check_bake.py` | Blender, Node e `web/node_modules` |
+| `check_unreal.py` | Blender; com `--engine`, a Unreal 5 |
+| `check_autorig.py` | Blender e um FBX rigado pelo Mixamo |
+| `check_script_dry.py` | Docker ligado, Blender e o Kimodo original instalado. Usa `data/tmp` e ocupa uma vaga do Kimodo |
+
+A interface não tem teste automático. `node tests/ui_click.mjs <url> <pasta> <passos...>` abre
+a página no Edge e clica de verdade, para conferir um botão novo.
 
 ## Limites conhecidos
 
@@ -415,8 +633,7 @@ O que saber:
 | `kimodo_scripts/` | o gerador que roda dentro do container do Kimodo (roteiro, transições, trajetória) |
 | `web/` | interface (three.js, sem build) |
 | `scripts/` | atalho de desktop, abrir e parar |
-| `data/` | acervo local: `projects/` (um projeto por personagem), `resultados/` (atalhos dos encerrados), `jobs/` |
+| `docs/` | guia e scripts de instalação do Kimodo (`kimodo-setup/`), scripts do ARDY (`ardy-setup/`) e a imagem deste README (`img/`) |
 | `tests/` | verificações e os BVHs de referência |
-#   p o n t e - a n i m a d a  
- #   p o n t e - a n i m a d a  
- 
+| `data/` | o acervo local, fora do git: `projects/` (um projeto por personagem), `resultados/` (atalhos dos encerrados), `jobs/` |
+| `ponte.toml` | configuração da máquina: caminho do Blender, geradores, porta do servidor |
