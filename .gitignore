@@ -1,0 +1,14 @@
+# Acervo local (assets, animações, resultados, jobs, logs)
+data/
+
+# Ambientes e dependências
+.venv/
+web/node_modules/
+__pycache__/
+*.pyc
+
+# Gerado por scripts/criar-atalho.ps1
+scripts/ponte.ico
+
+# Pastas temporárias de teste
+tests/_*/

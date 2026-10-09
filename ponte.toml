@@ -1,0 +1,28 @@
+# Configuração local do PonteAnimada. Caminhos desta máquina.
+
+[blender]
+exe = "C:/Program Files/Blender Foundation/Blender 5.2/blender.exe"
+
+[kimodo]
+# Desinstalado em 08/10/2026, a pedido do usuario: a ponte ficou, o Kimodo saiu do PC.
+# Para voltar: siga docs/kimodo-setup/GUIA-KIMODO.md e troque para installed = true.
+installed = false
+# O Kimodo roda em Docker dentro do WSL (guia em docs/kimodo-setup/GUIA-KIMODO.md).
+distro = "Ubuntu"
+user = "dap_p"
+repo = "~/kimodo"
+docker_desktop = "C:/Program Files/Docker/Docker/Docker Desktop.exe"
+text_encoder_url = "http://localhost:9550/"
+# O modelo/esqueleto e o limite de gerações simultâneas NÃO são configuráveis aqui:
+# são regras fixas do projeto, definidas em ponte/config.py.
+
+[kimodo_cpp]
+# O outro gerador: o mesmo modelo do Kimodo compilado para Windows, sem Docker
+# (https://github.com/localai-org/kimodo.cpp). Ao abrir a ponte, a interface pergunta qual usar.
+# Tambem desinstalado em 08/10/2026 (a pasta foi apagada). Para voltar: "Dois geradores", no README.
+repo = "D:/kimodo.cpp"
+text_encoder = "Llama-3-Kimodo-Q8_0.gguf"
+
+[server]
+host = "127.0.0.1"
+port = 8765

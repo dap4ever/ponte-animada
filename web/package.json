@@ -1,0 +1,8 @@
+{
+  "name": "ponte-animada-web",
+  "private": true,
+  "description": "Dependências do front (servidas direto de node_modules, sem build)",
+  "dependencies": {
+    "three": "^0.180.0"
+  }
+}
