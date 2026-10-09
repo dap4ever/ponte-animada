@@ -528,6 +528,32 @@ os pesos numa cópia da malha refeita por voxels. As proporções foram calibrad
 personagem rigado pelo Mixamo; `tests/check_autorig.py <fbx do Mixamo>` compara junta a junta.
 `?rig` no endereço (`/?rig#asset/<id>`) abre direto na tela de marcadores.
 
+Em 09/10/2026 o usuário achou ruim o rig de um personagem do Meshy (mãos e ombros fora do lugar)
+e pediu para o rigador "sempre entregar melhor". O que mudou em `autorig.py`:
+
+- **Dedos no eixo da própria mão** (`_hand_frame`): o gabarito dos dedos era posto na reta do
+  antebraço; agora o eixo e o plano da mão são medidos nos vértices além do pulso. Sem malha
+  bastante, ou se o medido não parece uma mão, vale a regra antiga.
+- **Pulso estimado na seção mais estreita do braço** (`_wrist_fraction`), medida em largura e
+  profundidade; o cotovelo estimado fica a 55 % do caminho até ele.
+- **Meia largura mínima do ombro: 8,5 % da altura** (`SHOULDER_MIN_HALF_WIDTH`, era 6 %). O ombro
+  continua saindo da continuação do antebraço; com o cotovelo um pouco dobrado essa reta aponta
+  para o pescoço, e é este limite que o segura.
+- **Centro do corpo** (`Body.x0`): a do meio entre a mediana dos vértices, o meio da cabeça e o
+  meio dos pés. Só a mediana era puxada 5 cm por um coldre de um lado.
+- **Ponta da mão só acima do joelho**: uma bota larga já tinha sido tomada pela mão.
+
+Medido com `check_autorig.py` na Zombiegirl e no Swat (antes → depois, em % da altura): dedos,
+média de 2,4–2,8 para 1,3–1,5; braços, média de 1,35–1,45 para 1,0; marcador do pulso, de
+0,7–2,8 para 0,1–0,3. O teste continua dando `FALHA` como dava antes, por `Spine2` (3,87 %) e
+`LeftToeBase` (3,90 %), que não foram mexidos.
+
+**O que não deu certo:** medir a direção do braço na malha, acima do cotovelo, para achar o
+ombro. No Swat o pior caso foi de 3,0 % para 5,4 %; foi retirado. Não tente de novo sem um
+jeito de separar o braço do tronco e do deltoide. O original de antes dessas mudanças está em
+`D:\Blender-Animacoes\Survivors_CortarMadeira\rig_alternativo\autorig_original_2026-10-09.py`.
+Nada disso foi testado pela tela de marcadores.
+
 ## Testes
 
 Não há pytest. Cada `tests/check_*.py` roda sozinho (`uv run python tests/<arquivo>`), imprime

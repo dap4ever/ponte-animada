@@ -400,6 +400,16 @@ O que saber:
 - O rigador foi calibrado e comparado com **um** personagem rigado pelo Mixamo (juntas a
   1–3 % da altura das do Mixamo). Em corpos muito diferentes os marcadores estimados podem
   sair longe: confira-os. A tela de marcadores e o envio de ZIP ainda não foram testados.
+  Em 09/10/2026 a comparação foi refeita com dois personagens do Mixamo (Zombiegirl e Swat),
+  depois de mudanças no rigador: braços a 1,0 % da altura em média e dedos a 1,3–1,5 %.
+- O ombro sai da continuação do antebraço, a um braço de distância do cotovelo: o rigador supõe
+  o braço reto. Em A-pose com o cotovelo um pouco dobrado ele vai para dentro, e o que o segura
+  é a largura mínima (8,5 % da altura, do meio do corpo até a junta). Se o ombro sair no lugar
+  errado, ponha o marcador do cotovelo na reta entre o ombro de verdade e o pulso.
+- Os ossos dos dedos seguem o eixo da mão medido na malha, mas a posição de cada dedo vem de
+  um gabarito de proporções, não da malha: em mão fechada ou muito diferente eles saem fora.
+- Malha muito densa (as do Meshy passam de 800 mil triângulos) deixa o Blender lento ao tocar a
+  animação, porque a deformação é feita no processador. Para animar, vale uma cópia reduzida.
 - O esqueleto do rigador tem os nomes e a hierarquia do Mixamo; a orientação interna de cada
   osso não foi igualada à do Mixamo. As animações geradas aqui funcionam (o retarget não
   depende disso). Aplicar nele uma animação baixada do site do Mixamo não foi testado.

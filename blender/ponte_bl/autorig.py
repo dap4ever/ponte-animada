@@ -25,6 +25,7 @@ SPINE_FRACTIONS = {"Spine": 0.161, "Spine1": 0.368, "Spine2": 0.551, "Neck": 0.8
 HIPS_ABOVE_GROIN = 0.045  # x altura
 HIPS_OVER_CHIN = 0.61  # altura do quadril sobre a altura do queixo
 UPPER_ARM_OVER_FOREARM = 1.18
+SHOULDER_MIN_HALF_WIDTH = 0.085  # x altura: do meio do corpo ate a junta do ombro, no minimo
 # Chute dos marcadores do braco, em fracoes da reta ombro -> ponta da mao.
 WRIST_FRACTION = 0.73  # quando a malha nao mostra onde o braco estreita
 ELBOW_OVER_WRIST = 0.55  # o cotovelo, em fracao do caminho ate o pulso
@@ -217,14 +218,14 @@ def build_joints(body: Body, markers: dict[str, list[float]], fingers: bool = Tr
         elbow2, wrist2 = np.array(markers[f"{key}_elbow"]), np.array(markers[f"{key}_wrist"])
         elbow = np.array([elbow2[0], body.depth_at(*elbow2), elbow2[1]])
         wrist = np.array([wrist2[0], body.depth_at(*wrist2), wrist2[1]])
-        # O ombro fica a um braco de distancia do cotovelo, na direcao do proprio braco, medida
-        # na malha. So com o braco reto ela e a continuacao do antebraco: com o cotovelo um
-        # pouco dobrado (o normal numa A-pose relaxada), essa reta levava o ombro para o pescoco.
-        upper = _upper_arm_axis(body, sign, elbow2, wrist2, float(elbow[1])) * np.linalg.norm(wrist2 - elbow2) * UPPER_ARM_OVER_FOREARM
-        shoulder = np.array([elbow2[0] + upper[0], 0.0, elbow2[1] + upper[1]])
+        forearm = wrist - elbow
+        # O ombro fica na continuacao do antebraco, a um braco de distancia do cotovelo.
+        shoulder = elbow - forearm / np.linalg.norm(forearm) * np.linalg.norm(forearm) * UPPER_ARM_OVER_FOREARM
         shoulder[1] = 0.5 * (elbow[1] + j["Spine2"][1])
-        # Nunca para dentro do tronco: no minimo a meia largura do pescoco.
-        shoulder[0] = chin[0] + sign * max(sign * (shoulder[0] - chin[0]), 0.06 * h)
+        # Nunca para dentro do tronco. Com o cotovelo um pouco dobrado (o normal numa A-pose
+        # relaxada) a continuacao do antebraco aponta para o pescoco, e este limite e o que segura
+        # o ombro no lugar.
+        shoulder[0] = chin[0] + sign * max(sign * (shoulder[0] - chin[0]), SHOULDER_MIN_HALF_WIDTH * h)
         j[f"{side}Arm"] = shoulder
         clavicle = j["Neck"].copy()
         clavicle[0] = chin[0] + 0.28 * (shoulder[0] - chin[0])
@@ -235,53 +236,6 @@ def build_joints(body: Body, markers: dict[str, list[float]], fingers: bool = Tr
         if fingers:
             j.update(_finger_joints(body, side, elbow, wrist))
     return j
-
-
-def _upper_arm_axis(body: Body, sign: float, elbow2: np.ndarray, wrist2: np.ndarray, elbow_y: float) -> np.ndarray:
-    """Direcao (x, altura) do cotovelo para o ombro, medida na malha.
-
-    Parte da continuacao do antebraco e a corrige pelo meio do braco em secoes acima do
-    cotovelo. Onde o braco esta solto do tronco, o meio e o da secao; onde ja encostou nele
-    (perto da axila numa A-pose), so o contorno de fora vale, e o meio fica a um raio dele.
-    Sem secoes bastantes, ou sem conseguir separar o braco do tronco ja no cotovelo, devolve a
-    continuacao do antebraco, que era a regra de antes.
-    """
-    h = body.height
-    straight = (elbow2 - wrist2) / np.linalg.norm(elbow2 - wrist2)
-    outward = np.array([sign * straight[1], -sign * straight[0]])  # para longe do corpo (em T-pose, para cima)
-    flat = body.v[:, [0, 2]] - elbow2
-    along, across = flat @ straight, flat @ outward
-    near = (np.abs(body.v[:, 1] - elbow_y) < 0.12 * h) & (np.abs(across) < 0.16 * h)
-
-    def section(s: float) -> tuple[float, float] | None:
-        """O trecho de malha mais de fora na secao a ``s`` do cotovelo: (lado de dentro, lado de fora)."""
-        values = np.sort(across[near & (np.abs(along - s) < 0.006 * h)])
-        if len(values) < 6:
-            return None
-        gaps = np.nonzero(np.diff(values) > 0.012 * h)[0]
-        return float(values[gaps[-1] + 1 if len(gaps) else 0]), float(values[-1])
-
-    at_elbow = section(0.0)
-    if at_elbow is None or at_elbow[1] - at_elbow[0] > 0.12 * h:
-        return straight
-    width = at_elbow[1] - at_elbow[0]
-    radius = 0.5 * width
-    length = float(np.linalg.norm(wrist2 - elbow2)) * UPPER_ARM_OVER_FOREARM
-    samples = [(0.0, 0.0)]  # o cotovelo e o marcador que o humano conferiu
-    for s in np.linspace(0.15, 0.70, 12) * length:
-        cut = section(float(s))
-        if cut is None:
-            continue
-        if cut[1] - cut[0] < 1.8 * width:
-            radius = 0.5 * (cut[1] - cut[0])
-            samples.append((float(s), 0.5 * (cut[0] + cut[1])))
-        else:
-            samples.append((float(s), cut[1] - radius))
-    if len(samples) < 6:
-        return straight
-    s, middle = np.array(samples).T
-    angle = float(np.clip(np.arctan((s @ middle) / (s @ s)), -np.radians(30.0), np.radians(30.0)))
-    return straight * np.cos(angle) + outward * np.sin(angle)
 
 
 def _hand_frame(body: Body, sign: float, elbow: np.ndarray, wrist: np.ndarray) -> tuple[np.ndarray, np.ndarray, float, np.ndarray]:
