@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PonteAnimada</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">
+    { "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="22" height="22">
+      <span>PonteAnimada</span>
+    </div>
+    <div class="kimodo" id="kimodo" aria-live="polite"></div>
+  </header>
+
+  <!-- Tela de entrada: escolha o personagem (cada um é um projeto) ou comece um novo. -->
+  <section class="home" id="home">
+    <div class="home-inner">
+      <header class="home-title">
+        <h1>Escolha o personagem</h1>
+        <p class="hint">Cada personagem é um projeto separado, com as animações e as prévias dele. Abra um para animar e validar, ou comece um novo.</p>
+      </header>
+      <input type="file" id="file-input" accept=".fbx,.glb,.gltf,.blend,.obj,.zip,.bvh,.png,.jpg,.jpeg,.tga,.bmp,.tif,.tiff,.webp,.exr,.dds,.mtl,.bin" multiple hidden>
+      <div class="picker" id="home-projects"></div>
+      <div class="home-extra">
+        <header class="home-head" id="meshy-head" hidden>
+          <h2>Pedidos ao Meshy</h2>
+        </header>
+        <div class="home-grid meshy-grid" id="home-meshy"></div>
+        <header class="home-head finals-head" id="finals-head" hidden>
+          <h2>Resultados</h2>
+          <button class="btn link small" id="open-shortcuts" title="Abre no Explorer a pasta dos atalhos (data\resultados), que fica fora das pastas dos projetos.">abrir pasta</button>
+        </header>
+        <div class="home-grid" id="home-finals"></div>
+        <section class="jobs home-jobs" id="home-jobs" aria-live="polite"></section>
+      </div>
+    </div>
+  </section>
+
+  <main class="layout" hidden>
+    <aside class="sidebar">
+      <div class="project-head">
+        <button class="btn small" id="back-home" title="Voltar à tela de projetos">←</button>
+        <div class="project-name" id="project-name"></div>
+      </div>
+      <div class="project-result" id="project-result"></div>
+      <input type="file" id="mixamo-input" accept=".fbx" multiple hidden>
+      <nav class="tabs" role="tablist" id="tabs">
+        <button role="tab" data-tab="result" title="As animações aplicadas no personagem, para validar. O resultado só sai quando o personagem é encerrado.">Prévias <span class="count" data-count="result"></span></button>
+        <button role="tab" data-tab="motion">Animações <span class="count" data-count="motion"></span></button>
+        <button role="tab" data-tab="asset">Personagem <span class="count" data-count="asset"></span></button>
+      </nav>
+      <div class="list" id="list" role="tabpanel"></div>
+      <section class="jobs" id="jobs" aria-live="polite"></section>
+    </aside>
+
+    <section class="stage">
+      <div class="viewport" id="viewport">
+        <div class="viewport-empty" id="viewport-empty"></div>
+        <div class="viewport-title" id="viewport-title"></div>
+      </div>
+      <div class="transport" id="transport">
+        <button class="icon-btn" id="play" aria-label="Reproduzir ou pausar" title="Espaço">▶</button>
+        <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Posição na animação">
+        <span class="time" id="time">0 / 0</span>
+        <select id="clip" aria-label="Animação do arquivo" hidden></select>
+        <select id="speed" aria-label="Velocidade">
+          <option value="0.25">0,25×</option>
+          <option value="0.5">0,5×</option>
+          <option value="1" selected>1×</option>
+          <option value="2">2×</option>
+        </select>
+        <label class="toggle"><input type="checkbox" id="follow" checked> Seguir</label>
+        <label class="toggle" title="Mostra a animação sem o deslocamento, só para ver. Para ter os arquivos assim, use Criar versão parada."><input type="checkbox" id="in-place-view"> Parado</label>
+        <label class="toggle"><input type="checkbox" id="bones"> Ossos</label>
+        <label class="toggle"><input type="checkbox" id="wire"> Malha</label>
+        <button type="button" class="btn small" id="draw-path" aria-pressed="false" title="Clique no chão para marcar por onde ele deve andar. Vale para a próxima animação pedida.">Desenhar caminho</button>
+        <button type="button" class="btn link small" id="clear-path" hidden>limpar caminho</button>
+      </div>
+      <form class="composer" id="composer">
+        <div class="script">
+          <div class="field">
+            <div class="script-title" id="script-title"></div>
+            <div class="steps" id="steps"></div>
+          </div>
+          <div class="script-foot">
+            <label class="field grow">
+              <span>Contexto <em>(opcional) — quem é e o que carrega (ex.: “A zombie”). É repetido em todos os passos: o Kimodo não lembra de um passo para o outro. Não gera trecho próprio.</em></span>
+              <input type="text" id="premise" placeholder="A zombie" maxlength="300" autocomplete="off">
+            </label>
+          </div>
+          <span class="sub" id="script-preview"></span>
+        </div>
+        <div class="composer-side">
+          <label class="field">
+            <span>Variações</span>
+            <select id="samples"><option value="1">1</option><option value="2">2</option></select>
+          </label>
+          <div class="field">
+            <span>Projeto</span>
+            <strong id="composer-project" title="A animação é gerada para o personagem do projeto aberto e fica guardada nele.">—</strong>
+          </div>
+          <label class="toggle" title="Os arquivos saem sem o deslocamento, para a engine mover o personagem."><input type="checkbox" id="in-place"> Gerar parado no lugar</label>
+          <button class="btn primary" type="submit" id="generate">Gerar passo</button>
+          <a class="btn ask-claude" id="ask-claude" href="#" title="Abre uma conversa do Claude Code no VS Code com o projeto e o que está aberto já escritos. Você completa em português com a animação que quer; o Claude escreve o roteiro em inglês, gera e aplica, e a prévia aparece aqui para validar.">Pedir ao Claude</a>
+        </div>
+      </form>
+    </section>
+
+    <aside class="detail" id="detail"></aside>
+  </main>
+
+  <!-- A pergunta de abertura: gerar no Kimodo original ou no kimodo.cpp. -->
+  <div class="engine-pick" id="engine-pick" hidden></div>
+  <div class="dropzone" id="dropzone" hidden><div>Solte para enviar</div></div>
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

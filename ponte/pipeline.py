@@ -6,14 +6,16 @@ então serve igual para o servidor (em thread) e para a CLI (direto).
 
 from __future__ import annotations
 
+import json
 import random
 import re
 import shutil
+import struct
 import zipfile
 from pathlib import Path
 from typing import Callable
 
-from . import blender, engines, jobs, kimodo, shortcuts, store
+from . import ardy, blender, engines, jobs, kimodo, meshy, shortcuts, store
 from .config import DATA, KIMODO_MODEL, KIMODO_SKELETON, ROOT
 
 Log = Callable[[str], None]
@@ -342,11 +344,45 @@ def _register_motion(asset_id: str, motion_id: str, bvh: Path, npz: Path | None,
     )
 
 
+def _register_ardy_motion(asset_id: str, motion_id: str, bvh: Path, npz: Path | None, meta: dict) -> dict:
+    """Guarda no projeto um clipe do ARDY, que vem no esqueleto dele (Core, 27 juntas, 20 quadros por segundo).
+
+    Entra como uma captura: ``ardy.bvh`` é o clipe no esqueleto do ARDY (já a 30 quadros por
+    segundo) e ``motion.bvh`` o convertido (nomes do SOMA de mesmo papel), que o retarget e as
+    medidas leem. ``motion.npz`` é de onde um passo seguinte parte, no ritmo do ARDY.
+    """
+    folder = store.folder("motion", motion_id, asset_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(bvh, folder / "ardy.bvh")
+        if npz:
+            shutil.copy2(npz, folder / "motion.npz")
+        info = blender.run_script("import_capture.py", ["--bvh", folder / "ardy.bvh", "--out", folder / "motion.bvh"], folder / "captura.json", folder / "captura.log")
+    except Exception:
+        shutil.rmtree(folder, ignore_errors=True)
+        raise
+    return store.save(
+        "motion",
+        {
+            "id": motion_id,
+            "asset_id": asset_id,
+            "created_at": store.now(),
+            "skeleton": ardy.SKELETON,
+            "frames": info["frames"],
+            "fps": info["fps"],
+            "duration_s": info["duration_s"],
+            # O esqueleto é o do ARDY: o retarget precisa da altura do quadril dele em pé (cm).
+            "stand_height": info["stand_height"],
+            **meta,
+        },
+    )
+
+
 def _npz_to_continue(motion_id: str) -> tuple[dict, Path]:
     motion = store.get("motion", motion_id)
     npz = store.folder("motion", motion_id) / "motion.npz"
     if not npz.exists():
-        raise ValueError("Só dá para continuar animações geradas pelo Kimodo aqui (as importadas de BVH não trazem os dados necessários).")
+        raise ValueError("Só dá para continuar animações geradas aqui (as importadas de BVH não trazem os dados necessários).")
     return motion, npz
 
 
@@ -406,8 +442,9 @@ def generate_motion(
 ) -> list[dict]:
     """Gera um roteiro no Kimodo (sempre SOMA 77) e registra uma animação por variação.
 
-    ``engine`` é o gerador (``engines.ENGINES``): o Kimodo original ou o kimodo.cpp. Sem ele,
-    vale o que o usuário escolheu ao abrir a ponte. Um não continua o clipe do outro.
+    ``engine`` é o gerador (``engines.ENGINES``): o Kimodo original, o kimodo.cpp ou o ARDY, que
+    tem esqueleto próprio. Sem ele, vale o que o usuário escolheu ao abrir a ponte. Um não
+    continua o clipe do outro.
 
     A animação nasce dentro do projeto do personagem ``asset_id``.
     ``steps``: [{text, seconds, travel?, loop?}], em ordem. Cada passo parte dos últimos
@@ -422,7 +459,7 @@ def generate_motion(
     store.get("asset", asset_id)
     seed = random.randrange(2**31) if seed is None else seed
     engine, previous = resolve_engine(engine, continue_from)
-    previous_npz = _npz_to_continue(continue_from)[1] if previous and engine == "kimodo" else None
+    previous_npz = _npz_to_continue(continue_from)[1] if previous and engine in ("kimodo", "ardy") else None
     if previous and previous.get("asset_id") != asset_id:
         raise ValueError("A animação a continuar é de outro projeto.")
     # text_weight: quanto o Kimodo obedece ao texto do passo (padrão dele 2; mais dá um gesto mais marcado).
@@ -448,7 +485,10 @@ def generate_motion(
             raise ValueError("No kimodo.cpp as variações só valem no primeiro passo do roteiro: numa continuação a semente é a do clipe continuado.")
         if previous:
             seed, denoise = previous["seed"], previous.get("diffusion_steps", denoise)
+    if engine == "ardy":
+        denoise = ardy.DIFFUSION_STEPS  # o ARDY tem os passos de difusão dele
     take = {"name": "motion", "steps": chain, "seed": seed, "samples": samples, "continue_from": previous_npz}
+    register = _register_ardy_motion if engine == "ardy" else _register_motion
     try:
         outputs = engines.module(engine).generate(work, [take], steps=denoise, log=log)
         motions = []
@@ -456,7 +496,7 @@ def generate_motion(
             motion_id = base_id if samples == 1 else f"{base_id}-s{out['sample']}"
             meta = {
                 "source": "kimodo",
-                "model": KIMODO_MODEL,
+                "model": ardy.MODEL if engine == "ardy" else KIMODO_MODEL,
                 "engine": engine,
                 "prompt": title,
                 "name": (name or "").strip() or (previous or {}).get("name", ""),
@@ -471,7 +511,7 @@ def generate_motion(
                 "diffusion_steps": denoise,
                 "continued_from": continue_from,
             }
-            motions.append(_register_motion(asset_id, motion_id, out["bvh"], out["npz"], meta))
+            motions.append(register(asset_id, motion_id, out["bvh"], out["npz"], meta))
             log(f"animação registrada: {motion_id} ({out['frames']} frames)")
         return motions
     finally:
@@ -646,7 +686,119 @@ def import_capture(
         raise
 
 
+def import_ardy_session(asset_id: str, session: str, label: str | None = None, *, start: float | None = None, end: float | None = None, log: Log = _quiet) -> dict:
+    """Traz para o projeto uma sessão exportada pelo demo ao vivo do ARDY e já a aplica no personagem.
+
+    ``session`` é o nome do arquivo em ``~/ardy/.cache/export`` (``ardy.sessions`` lista).
+    ``start`` e ``end`` recortam a sessão, em segundos. Ela vira um roteiro do ARDY como os
+    gerados aqui: cada texto usado no demo é um passo, e dá para continuar dela. Devolve a prévia.
+    """
+    _require_ready(asset_id)
+    work = DATA / "tmp" / f"sessao-{store.new_id(Path(session).stem)}"
+    try:
+        clip = ardy.convert_session(session, work, start=start, end=end, log=log)
+        label = (label or Path(clip["file"]).stem).strip() or "Sessão do ARDY"
+        fps = ardy.PROJECT_FPS
+        texts = [s["text"] for s in clip["steps"]] or [label]
+        starts = [s["start_frame"] for s in clip["steps"]] or [0]
+        steps = [
+            {"text": text, "seconds": round((after - at) / fps, 3), "travel": None, "loop": False, "text_weight": None, "label": None, "start_frame": at}
+            for text, at, after in zip(texts, starts, [*starts[1:], clip["frames"]])
+        ]
+        meta = {
+            "source": "kimodo",
+            "model": ardy.MODEL,
+            "engine": "ardy",
+            "prompt": " → ".join(texts),
+            "name": label,
+            "premise": "",
+            "steps": steps,
+            # De que arquivo do demo o clipe veio, e de que trecho dele (segundos).
+            "session": {"file": clip["file"], "exported_at": clip.get("exported_at"), "seconds": clip.get("seconds")},
+            "continued_from": None,
+        }
+        motion = _register_ardy_motion(asset_id, store.new_id(label), clip["bvh"], clip["npz"], meta)
+    finally:
+        kimodo.cleanup_work_dir(work)
+    log(f"sessão do ARDY recebida: {label} ({motion['duration_s']:g} s, {len(steps)} texto(s))")
+    try:
+        return retarget(asset_id, motion["id"], log=log)
+    except Exception:
+        store.delete("motion", motion["id"])
+        raise
+
+
 # --- Retarget ---------------------------------------------------------------------------
+
+
+# --- Animação pronta ------------------------------------------------------------------
+# O que é feito no Blender, por trás (o corpo gerado, os pés acertados, a arma na mão), chega como
+# um GLB com o personagem já animado. Não passa por retarget: é guardado e aparece na tela.
+
+
+def _glb_clip(path: Path) -> dict:
+    """Quantos quadros e segundos tem a animação de um GLB (a mais longa, se houver várias)."""
+    with path.open("rb") as f:
+        head = f.read(20)
+        if len(head) < 20 or head[:4] != b"glTF" or head[16:20] != b"JSON":
+            raise ValueError("O arquivo não é um GLB.")
+        doc = json.loads(f.read(struct.unpack("<I", head[12:16])[0]))
+    accessors = doc.get("accessors") or []
+    animations = doc.get("animations") or []
+    clip = {"frames": 0, "duration_s": 0.0, "clips": [a.get("name") or f"animação {i + 1}" for i, a in enumerate(animations)]}
+    for animation in animations:
+        for sampler in animation.get("samplers") or []:
+            times = accessors[sampler["input"]]
+            end = float((times.get("max") or [0.0])[0])
+            if end > clip["duration_s"]:
+                clip.update(frames=int(times.get("count", 0)), duration_s=end)
+    clip["fps"] = round((clip["frames"] - 1) / clip["duration_s"], 2) if clip["duration_s"] > 0 and clip["frames"] > 1 else 30.0
+    clip["duration_s"] = round(clip["duration_s"], 3)
+    return clip
+
+
+def add_ready_animation(asset_id: str, glb: Path, name: str | None = None, *, blend: Path | None = None, replace: bool = False, log: Log = _quiet) -> dict:
+    """Põe na tela do projeto uma animação que já vem pronta: um GLB com o personagem animado.
+
+    ``blend`` guarda junto o arquivo do Blender de onde ela saiu. Com ``replace``, a animação
+    pronta de mesmo nome que já estiver no projeto sai quando esta entra. Devolve a prévia.
+    """
+    asset = store.get("asset", asset_id)
+    glb = Path(glb)
+    if glb.suffix.lower() != ".glb" or not glb.is_file():
+        raise ValueError(f"Preciso de um arquivo .glb que exista: {glb}")
+    if blend is not None and not Path(blend).is_file():
+        raise ValueError(f"Não achei o arquivo do Blender: {blend}")
+    clip = _glb_clip(glb)
+    if not clip["clips"]:
+        raise ValueError("Este GLB não traz animação: exporte com a ação do personagem.")
+    name = (name or glb.stem).strip() or "Animação"
+    same = [m for m in store.list_all("motion", asset_id) if m.get("source") == "blender" and m.get("name") == name]
+    if same and not replace:
+        raise ValueError(f'Já existe a animação "{name}" neste projeto. Use --replace para trocá-la.')
+
+    item_id = store.new_id(name)
+    folder = store.folder("result", item_id, asset_id)
+    folder.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(glb, folder / "result.glb")
+    files = {"glb": "result.glb"}
+    if blend is not None:
+        shutil.copy2(blend, folder / "result.blend")
+        files["blend"] = "result.blend"
+    step = {"text": name, "label": name, "start_frame": 0, "seconds": clip["duration_s"], "travel": None, "loop": False, "star": True}
+    store.save(
+        "motion",
+        {"id": item_id, "asset_id": asset_id, "created_at": store.now(), "source": "blender", "filename": glb.name, "prompt": name, "name": name, "premise": "", "frames": clip["frames"], "fps": clip["fps"], "duration_s": clip["duration_s"], "steps": [step]},
+    )
+    stats = {"frames": clip["frames"], "fps": clip["fps"], "duration_s": clip["duration_s"], "action": clip["clips"][0], "clips": clip["clips"]}
+    result = store.save(
+        "result",
+        {"id": item_id, "created_at": store.now(), "asset_id": asset_id, "asset_name": asset["name"], "motion_id": item_id, "prompt": name, "in_place": True, "adjust": None, "props": {}, "files": files, "sheet": None, "stats": stats, "review": store.blank_review()},
+    )
+    for old in same:
+        delete("motion", old["id"])
+    log(f"animação pronta na tela: {name} ({clip['duration_s']:g} s)")
+    return result
 
 
 def result_id_for(motion_id: str, in_place: bool) -> str:
@@ -980,3 +1132,31 @@ def reopen_project(asset_id: str) -> dict:
     _remove_shortcut(asset)
     shutil.rmtree(store.final_folder(asset_id), ignore_errors=True)
     return store.update("asset", asset_id, final=None)
+
+
+# --- Meshy ------------------------------------------------------------------------------
+# Um personagem pedido ao Meshy nasce em duas etapas (``meshy.py``): a imagem, que o usuário
+# aprova na tela de entrada, e só então o modelo 3D, que vira um projeto novo aqui.
+
+
+def approve_meshy(request_id: str, *, polycount: int = meshy.POLYCOUNT, log: Log = _quiet) -> dict:
+    """A imagem do pedido foi aprovada: gera o modelo 3D no Meshy e cria o projeto dele. Devolve o personagem.
+
+    O pedido já pode vir marcado como aprovado (a tela marca no clique, para dois cliques não
+    pedirem dois modelos).
+    """
+    record = meshy.get(request_id)
+    if record["status"] == meshy.WAITING:
+        meshy.claim(request_id)
+    glb = meshy.generate_model(request_id, polycount=polycount, log=log)
+    named = glb.with_name(store.slugify(record["name"], 40) + ".glb")  # o projeto guarda o arquivo com o nome do personagem
+    shutil.copy2(glb, named)
+    try:
+        asset = add_asset(named, record["name"], log)
+    except Exception as exc:
+        meshy.update(request_id, status=meshy.WAITING, error=str(exc))
+        raise
+    finally:
+        named.unlink(missing_ok=True)
+    meshy.update(request_id, status=meshy.READY, asset_id=asset["id"], finished_at=store.now())
+    return store.update("asset", asset["id"], meshy={"request": request_id, "prompt": record["prompt"]})

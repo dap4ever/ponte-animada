@@ -2,27 +2,41 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 import os
+import secrets
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Callable
+from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import blender, engines, jobs, kimodo, kimodo_cpp, pipeline, store
+from . import ardy, blender, engines, jobs, kimodo, kimodo_cpp, meshy, pipeline, store, terminal
 from .config import DATA, KIMODO_MAX_SAMPLES, WEB
 
 DATA.mkdir(parents=True, exist_ok=True)
 store.PROJECTS.mkdir(exist_ok=True)
 store.migrate_layout_safely()  # acervo do formato antigo vai para a pasta do projeto dele
-app = FastAPI(title="PonteAnimada", docs_url="/api/docs", openapi_url="/api/openapi.json")
+
+
+@asynccontextmanager
+async def _lifespan(_: FastAPI):
+    yield
+    terminal.close_all()  # servidor parado com Ctrl+C: nenhum Claude de terminal fica rodando sem dono
+
+
+app = FastAPI(title="PonteAnimada", docs_url="/api/docs", openapi_url="/api/openapi.json", lifespan=_lifespan)
 POOL = ThreadPoolExecutor(max_workers=6, thread_name_prefix="ponte-job")
 _kimodo_cache: tuple[float, dict] = (0.0, {})
+_ardy_cache: tuple[float, dict] = (0.0, {})
 
 
 def submit(kind: str, title: str, params: dict, work: Callable[[Callable[[str], None]], dict | None]) -> dict:
@@ -59,6 +73,15 @@ def _kimodo_status() -> dict:
     return value
 
 
+def _ardy_status() -> dict:
+    global _ardy_cache
+    at, value = _ardy_cache
+    if time.monotonic() - at > 4.0:
+        value = ardy.status()
+        _ardy_cache = (time.monotonic(), value)
+    return value
+
+
 # --- Estado ---------------------------------------------------------------------------
 
 
@@ -92,7 +115,11 @@ def state() -> dict:
         "results": previews,
         "jobs": jobs.list_jobs(),
         "kimodo": _kimodo_status(),
-        # Os dois geradores e qual está em uso: a interface pergunta ao abrir.
+        # O ARDY: instalado? o codificador de texto dele está no ar?
+        "ardy": _ardy_status(),
+        # Os personagens pedidos ao Meshy: a imagem de cada um, para aprovar, e o que já virou projeto.
+        "meshy": meshy.status(),
+        # Os geradores e qual está em uso: a interface pergunta ao abrir.
         "engines": engines.status(),
     }
 
@@ -103,7 +130,7 @@ class EngineBody(BaseModel):
 
 @app.put("/api/engine")
 def choose_engine(body: EngineBody) -> dict:
-    """Troca o gerador em uso: o Kimodo original ou o kimodo.cpp."""
+    """Troca o gerador em uso: o Kimodo original, o kimodo.cpp ou o ARDY."""
     try:
         engines.choose(body.engine)
     except ValueError as exc:
@@ -328,7 +355,7 @@ class GenerateBody(BaseModel):
     replaces: str | None = None
     # Nome do roteiro (ex.: "Reações"). Numa continuação, sem ele vale o que o roteiro já tinha.
     name: str | None = Field(default=None, max_length=60)
-    # O gerador: "kimodo" (o original) ou "cpp". Sem ele, o que está em uso.
+    # O gerador: "kimodo" (o original), "cpp" ou "ardy". Sem ele, o que está em uso.
     engine: str | None = None
 
 
@@ -361,6 +388,8 @@ def generate(body: GenerateBody) -> dict:
             kimodo_cpp.check_script([*((previous or {}).get("steps") or []), *steps])
             if previous and body.samples > 1:
                 raise ValueError("No kimodo.cpp as variações só valem no primeiro passo do roteiro.")
+        if engine == "ardy":
+            ardy.check_script(steps)
     except (kimodo.KimodoError, ValueError) as exc:
         raise HTTPException(400, str(exc)) from exc
     # Toda animação nasce dentro de um projeto (o do personagem que a recebe).
@@ -370,8 +399,8 @@ def generate(body: GenerateBody) -> dict:
     if previous:
         if previous.get("asset_id") != body.asset_id:
             raise HTTPException(400, "A animação a continuar é de outro projeto.")
-        if engine == "kimodo" and not (store.folder("motion", previous["id"]) / "motion.npz").exists():
-            raise HTTPException(400, "Só dá para continuar animações geradas pelo Kimodo aqui.")
+        if engine in ("kimodo", "ardy") and not (store.folder("motion", previous["id"]) / "motion.npz").exists():
+            raise HTTPException(400, "Esta animação não traz os dados para continuar dela. Comece uma nova animação.")
     if body.replaces:
         if body.replaces == body.continue_from:
             raise HTTPException(400, "A animação a refazer não pode ser a mesma de onde o passo parte.")
@@ -578,7 +607,16 @@ def delete(kind: str, item_id: str) -> dict:
     _check(kind, item_id)
     if kind == "asset":
         _free_project(item_id)  # com trabalho rodando no projeto, o job gravaria numa pasta que sumiu
+        terminal.restart(item_id)  # o terminal aberto na pasta do projeto seguraria ela no disco
     pipeline.delete(kind, item_id)
+    if kind == "asset":
+        # O Windows demora um instante para soltar a pasta depois que o terminal dela fecha.
+        folder = store.project_folder(item_id)
+        for _ in range(10):
+            if not folder.exists():
+                break
+            time.sleep(0.3)
+            store.delete(kind, item_id)
     return {"deleted": item_id}
 
 
@@ -601,6 +639,208 @@ def kimodo_stop() -> dict:
     return {"stopped": True}
 
 
+# --- ARDY -----------------------------------------------------------------------------
+
+
+@app.post("/api/ardy/start")
+def ardy_start() -> dict:
+    """Sobe o codificador de texto do ARDY e o deixa no ar, para vários textos novos em seguida."""
+    try:
+        if not ardy.encoder_ready() and (trouble := ardy.encoder_blocker()):
+            raise kimodo.KimodoError(trouble)
+    except kimodo.KimodoError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return submit("kimodo", "Ligar o codificador de texto do ARDY", {}, lambda log: ardy.start_encoder(log))
+
+
+@app.post("/api/ardy/stop")
+def ardy_stop() -> dict:
+    try:
+        message = ardy.stop()
+    except kimodo.KimodoError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    global _ardy_cache
+    _ardy_cache = (0.0, {})
+    return {"stopped": True, "message": message}
+
+
+@app.get("/api/ardy/sessions")
+def ardy_sessions() -> dict:
+    """As sessões exportadas pelo demo ao vivo do ARDY (aba IO, Export Session)."""
+    try:
+        return ardy.sessions()
+    except kimodo.KimodoError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+class ArdySessionBody(BaseModel):
+    asset_id: str
+    session: str = Field(min_length=1, max_length=200)
+    label: str | None = Field(default=None, max_length=60)
+    # Recorte da sessão, em segundos.
+    start: float | None = Field(default=None, ge=0)
+    end: float | None = Field(default=None, gt=0)
+
+
+@app.post("/api/motions/import-ardy")
+def import_ardy_session(body: ArdySessionBody) -> dict:
+    """Traz uma sessão do demo ao vivo do ARDY para o projeto e a aplica no personagem."""
+    asset = _ready_asset(body.asset_id)
+    name = (body.label or Path(body.session).stem).strip()
+
+    def work(log):
+        preview = pipeline.import_ardy_session(body.asset_id, body.session, body.label, start=body.start, end=body.end, log=log)
+        return {"result_ids": [preview["id"]], "motion_ids": [preview["motion_id"]]}
+
+    return submit("retarget", f"Importar do ARDY: {name} → {asset['name']}", {"asset_id": body.asset_id}, work)
+
+
+# --- Meshy ----------------------------------------------------------------------------
+
+
+def _meshy_request(request_id: str) -> dict:
+    try:
+        return meshy.get(request_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+
+
+def _meshy_jobs(request_id: str | None = None) -> list[dict]:
+    """Jobs do Meshy em andamento (os de um pedido, ou todos)."""
+    return [j for j in jobs.list_jobs() if j["status"] in jobs.ACTIVE and j["kind"] == "meshy" and (request_id is None or (j.get("params") or {}).get("meshy_request") == request_id)]
+
+
+class MeshyBody(BaseModel):
+    """Pedido de personagem ao Meshy: o texto, em inglês, do que a imagem deve mostrar."""
+
+    prompt: str = Field(min_length=3, max_length=800)
+    name: str | None = Field(default=None, max_length=60)
+    pose: str = "a-pose"
+    ai_model: str = meshy.IMAGE_MODEL
+    # Pedido reprovado que este refaz: sai da lista quando a imagem nova chega.
+    replaces: str | None = None
+
+
+@app.post("/api/meshy/requests")
+def meshy_image(body: MeshyBody) -> dict:
+    """Etapa 1: pede ao Meshy a imagem do personagem. Ela fica na tela de entrada, para aprovar."""
+    if not meshy.api_key():
+        raise HTTPException(409, "Falta a chave da API do Meshy. Guarde-a com `uv run ponte meshy key <chave>`.")
+    name = (body.name or body.prompt[:40]).strip()
+    return submit("meshy", f"Meshy: imagem de {name}", {}, lambda log: {"meshy_request": meshy.request_image(body.prompt, body.name, pose=body.pose, ai_model=body.ai_model, replaces=body.replaces, log=log)["id"]})
+
+
+@app.post("/api/meshy/requests/{request_id}/approve")
+def meshy_approve(request_id: str) -> dict:
+    """Etapa 2: a imagem foi aprovada. Gera o modelo 3D e cria o projeto dele."""
+    record = _meshy_request(request_id)
+    try:
+        if record["status"] == meshy.BUILDING:
+            if _meshy_jobs(request_id):
+                raise meshy.MeshyError("O modelo 3D deste pedido já está sendo gerado.")
+        else:
+            meshy.claim(request_id)  # já, no clique: um segundo clique é recusado
+    except meshy.MeshyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return submit("meshy", f"Meshy: modelo 3D de {record['name']}", {"meshy_request": request_id}, lambda log: {"asset_id": pipeline.approve_meshy(request_id, log=log)["id"]})
+
+
+class MeshyReject(BaseModel):
+    note: str = Field(default="", max_length=600)
+
+
+@app.post("/api/meshy/requests/{request_id}/reject")
+def meshy_reject(request_id: str, body: MeshyReject) -> dict:
+    """A imagem não serve. A nota diz o que mudar: é o que quem faz o pedido lê em `ponte status`."""
+    _meshy_request(request_id)
+    try:
+        return meshy.reject(request_id, body.note)
+    except meshy.MeshyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.delete("/api/meshy/requests/{request_id}")
+def meshy_delete(request_id: str) -> dict:
+    record = _meshy_request(request_id)
+    if record["status"] in ("gerando_imagem", meshy.BUILDING) and _meshy_jobs():
+        raise HTTPException(409, "Este pedido está sendo gerado. Espere terminar.")
+    meshy.delete(request_id)
+    return {"deleted": request_id}
+
+
+# --- Terminal do projeto --------------------------------------------------------------------
+# Um terminal por projeto, já na pasta dele e parado no prompt: a IA é chamada por quem está na
+# tela (ponte/terminal.py).
+# A página fala com ele por WebSocket: {"type": "input", "data"} e {"type": "resize", "cols", "rows"}
+# na ida; {"type": "output", "data"}, {"type": "exit"} e {"type": "error", "message"} na volta.
+
+
+@app.get("/api/terminal")
+def terminal_info() -> dict:
+    """O que a página precisa para abrir o terminal. Só a própria página consegue ler o ``token``."""
+    return {**terminal.status(), "token": terminal.TOKEN}
+
+
+@app.post("/api/terminal/{asset_id}/restart")
+def terminal_restart(asset_id: str) -> dict:
+    _check("asset", asset_id)
+    terminal.restart(asset_id)
+    return {"restarted": asset_id}
+
+
+def _from_this_page(ws: WebSocket) -> bool:
+    """A conexão vem da página da ponte, nesta máquina? Página de outro site não abre terminal aqui."""
+    origin = urlsplit(ws.headers.get("origin") or "")
+    return origin.hostname in ("127.0.0.1", "localhost") and origin.port == ws.url.port
+
+
+@app.websocket("/api/terminal/{asset_id}")
+async def terminal_socket(ws: WebSocket, asset_id: str, token: str = "") -> None:
+    if not _from_this_page(ws) or not secrets.compare_digest(token, terminal.TOKEN):
+        await ws.close(code=4403)
+        return
+    await ws.accept()
+    trouble = terminal.problem()
+    try:
+        store.get("asset", asset_id)
+    except (KeyError, ValueError):
+        trouble = "Este projeto não existe mais."
+    if trouble:
+        await ws.send_text(json.dumps({"type": "error", "message": trouble}))
+        await ws.close()
+        return
+    try:
+        session = await asyncio.to_thread(terminal.get, asset_id)
+    except Exception as exc:  # noqa: BLE001 - o terminal não abriu: a tela mostra por quê
+        await ws.send_text(json.dumps({"type": "error", "message": f"O terminal não abriu: {exc}"}))
+        await ws.close()
+        return
+    queue: asyncio.Queue = asyncio.Queue()
+    await ws.send_text(json.dumps({"type": "output", "data": session.attach(asyncio.get_running_loop(), queue), "replay": True}))
+
+    async def forward() -> None:
+        while True:
+            data = await queue.get()
+            if data is None:
+                await ws.send_text(json.dumps({"type": "exit"}))
+                return
+            await ws.send_text(json.dumps({"type": "output", "data": data}))
+
+    task = asyncio.create_task(forward())
+    try:
+        while True:
+            message = json.loads(await ws.receive_text())
+            if message.get("type") == "input":
+                session.write(str(message.get("data", "")))
+            elif message.get("type") == "resize":
+                session.resize(int(message.get("cols", 100)), int(message.get("rows", 30)))
+    except (WebSocketDisconnect, RuntimeError, ValueError):
+        pass
+    finally:
+        task.cancel()
+        session.detach(queue)
+
+
 # --- Arquivos estáticos (por último: "/" casa com tudo) -------------------------------------
 
 class RevalidatedFiles(StaticFiles):
@@ -614,4 +854,6 @@ class RevalidatedFiles(StaticFiles):
 
 app.mount("/files", RevalidatedFiles(directory=DATA), name="files")
 app.mount("/vendor/three", StaticFiles(directory=WEB / "node_modules" / "three", check_dir=False), name="three")
+app.mount("/vendor/xterm", StaticFiles(directory=WEB / "node_modules" / "@xterm" / "xterm", check_dir=False), name="xterm")
+app.mount("/vendor/xterm-fit", StaticFiles(directory=WEB / "node_modules" / "@xterm" / "addon-fit", check_dir=False), name="xterm-fit")
 app.mount("/", RevalidatedFiles(directory=WEB, html=True), name="web")

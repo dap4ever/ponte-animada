@@ -2,29 +2,147 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-PonteAnimada: ponte entre o Blender, o Kimodo e a validação humana de personagens e animações 3D.
-O fluxo de uso, a lista completa da CLI e os limites conhecidos estão no `README.md`. Aqui fica
-o que muda como você trabalha.
+PonteAnimada: a tela em que o usuário vê seus personagens 3D e as animações deles, com o Blender
+por trás, os geradores de animação e um terminal por projeto, onde ele chama a IA que faz as
+animações. O uso, a lista completa da CLI e os limites conhecidos estão no `README.md`. Aqui
+fica o que muda como você trabalha.
 
-## Estado em 09/10/2026: nenhum gerador ligado à ponte (o ARDY está instalado à parte)
+**O repositório é público** (`github.com/dap4ever/ponte-animada`): este arquivo, o README e os
+`docs/` são lidos por qualquer um. Chave, senha, dado pessoal e nome de outros projetos dele não
+entram aqui, nem imagem de personagem do jogo. Só grave e envie (`git commit`, `git push`)
+quando ele pedir.
 
-No fim do dia 08/10/2026 o usuário mandou desinstalar o Kimodo original e o kimodo.cpp e
-manter só a ponte ("apague tudo deixe somente a ponte"), para o caso de querer o Kimodo de novo.
-Ele vinha de achar a qualidade insuficiente e estava olhando o MotionBricks (irmão do Kimodo,
-em tempo real; o que a NVIDIA publicou move um robô, não um humano, e não gera clipe a partir
-de texto).
+## A tela nova (10 e 11/10/2026): projeto = visor + animações + terminal
 
-- **Não há como gerar animação agora.** `ponte gen` e a tela recusam com o motivo; a barra de
-  cima mostra "Nenhum gerador de animação instalado" e a pergunta do gerador não aparece. O
-  resto funciona: importar (Mixamo, captura), validar, ajustar, encerrar.
-- O que saiu: `D:\kimodo.cpp`, `D:\kimodo.cpp-go`, `~/kimodo` e os quatro modelos em
-  `~/.cache/huggingface/hub` no Ubuntu (o `token` do Hugging Face ficou), a imagem `kimodo:1.0`
-  e o cache de construção no Docker, e `C:\Users\dap_p\kimodo-setup`.
-- O que ficou: todo o código da ponte para os dois geradores, o guia e os scripts de instalação
+Depois de aprovar o parado e o andar do Soldado, o usuário mandou mudar a ponte inteira: "vamos
+usar apenas o que nos interessa"; "terá apenas do lado esquerdo uma tela do tipo blender onde
+vejo a textura animada ou não"; "o blender vai rodar apenas no backend, com você manipulando
+ele"; "retarget com modelo do mixamo eu continuo fazendo manualmente como já é agora, mas existe
+muita informação desnecessária"; "dentro do projeto da ponte terá uma janela de terminal onde ele
+já abrir na pasta do projeto em questão" ("terminal é pra falar com você"); "meshy continua";
+"pode apagar tudo, só deixe o fbx com as texturas"; "me entregue o primeiro formato de design que
+depois discutiremos melhorias". **O que está no ar é esse primeiro formato: as melhorias são
+combinadas com ele, uma de cada vez.** A primeira veio em 11/10, com ele já olhando a tela: "o
+terminal tem que vir sem chamar o claude, ele tem que vir apenas dentro da pasta, pronto para ser
+chamado, pois posso querer usar outra IA".
+
+**Como se trabalha agora.** Ele abre o projeto do personagem, chama no terminal da tela a IA que
+quiser (o `claude` ou outra) e escreve para ela. Essa IA (você, se está lendo isto a partir da
+pasta de um projeto) faz a animação no Blender escondido, exporta um GLB e o põe na lista com
+`ponte anim add`. Ele vê no visor ao lado e diz o que achou. Uma animação de cada vez. O Blender
+com janela, que ele usava para acompanhar o Soldado, saiu do caminho: o que ele vê é o visor da
+ponte.
+
+- **A tela** (`web/index.html`, `app.js`, `style.css`; `viewer.js` é o de antes). Entrada: os
+  projetos, um cartão cada, "Novo personagem", os pedidos do Meshy e o que está rodando. Projeto:
+  à esquerda o visor (vistas Frente/Lado/Trás/Cima, tocar e pausar, barra de tempo, velocidade,
+  Seguir, Parado, Ossos, Malha); à direita, em cima, **Animações** ("Modelo parado" e uma linha por
+  animação, com a duração e de onde veio: Mixamo, Blender ou gerada; × apaga, dois cliques mudam
+  o nome; o botão **+ Mixamo (.fbx)**) e, embaixo, o **terminal**. A divisória entre as metades
+  arrasta. O endereço guarda o projeto e a animação (`#p/<projeto>/<animação>`). Animação que
+  chega com a tela aberta abre sozinha.
+- **O que a tela nova não tem**: laudo, rig automático, acessórios (prender o fuzil na mão),
+  roteiros e passos, revisão (aprovar/reprovar), encerrar, Unreal, troca de gerador. Tudo isso
+  continua funcionando por baixo (CLI e API) e na tela anterior, guardada em **`/antiga/`**
+  (`web/antiga/`, sem link na tela nova). Não a apague: é por ela que se dá esqueleto a um modelo
+  do Meshy que chega sem.
+- **Animação pronta** (`pipeline.add_ready_animation`, `uv run ponte anim add <projeto>
+  <arquivo.glb> --name "<nome>" [--blend <arquivo>] [--replace]`): um GLB com o personagem (e os
+  acessórios) já animado entra na lista sem retarget. Vira uma animação (`source: "blender"`) e
+  uma prévia com o mesmo id, com `result.glb`. A tela a enxerga em 2 s. O GLB tem de começar no
+  tempo 0 (`export_anim_slide_to_zero` no exportador do Blender): sem isso o laço ganha um
+  quadro parado. Os do Soldado saem por `D:\Blender-Animacoes\Soldado\scripts\exportar_glb.py`.
+- **O terminal** (`ponte/terminal.py`, rotas `/api/terminal...` em `server.py`, xterm.js em
+  `web/node_modules/@xterm`): um PowerShell de verdade, parado no prompt da pasta do projeto.
+  **Ele não chama IA nenhuma sozinho, por ordem do usuário** (a primeira versão já subia com o
+  `claude`; ele mandou tirar, porque pode querer outra IA). Não volte a chamar o `claude` ao
+  abrir, nem ponha botão que chame, sem ele pedir. Há faxina, porque o que se chama ali pesa
+  (um Claude Code são uns 250 MB e mais de dez processos, com os conectores): sem ninguém olhando
+  e sem que ninguém tenha escrito nele, fecha em 20 s (`GRACE`); com algo escrito, espera a volta
+  e só fecha depois de 3 h calado sem ninguém olhando (`IDLE`) ou quando o servidor para. Na
+  primeira versão, sem faxina e chamando o Claude, ele abriu os sete projetos para olhar e
+  ficaram sete Claudes ligados (2 GB). "reiniciar" fecha o terminal com o que estiver rodando e
+  abre outro; num terminal novo, `claude --continue` retoma a conversa anterior do Claude. Apagar
+  um projeto fecha o terminal dele antes (o Windows não apaga a pasta em que um programa está).
+- **Um terminal na página é um shell na máquina.** Só atende à própria página da ponte: origem
+  local na mesma porta e o `TOKEN` sorteado a cada subida do servidor (`/api/terminal` o entrega;
+  página de outro site não lê a resposta). Não afrouxe isso nem ponha o servidor para escutar
+  fora do `127.0.0.1`.
+- **O guia de cada projeto**: ao abrir o terminal, a ponte grava na pasta do projeto o mesmo
+  texto com dois nomes, `CLAUDE.md` (o que o Claude Code lê) e `AGENTS.md` (o que o Codex, o
+  opencode e outras leem), por `terminal.write_guide`: quem está escrevendo, a pasta, o
+  personagem, como rodar o Blender escondido e como pôr a animação na tela. Cada arquivo é
+  regravado a cada abertura enquanto começar com a linha de marca; para escrever à mão num
+  projeto, apague essa linha, e a ponte não toca mais naquele arquivo. O que for específico de um
+  personagem (o do Soldado, por exemplo) vai num arquivo à parte na pasta dele, apontado pelo
+  guia, e não aqui.
+- **O acervo foi esvaziado em 10/10/2026**, por ordem dele: de cada projeto ficou só o personagem
+  (`personagem/`, com o FBX, as texturas e, no Soldado, o fuzil). Saíram 124 animações e prévias
+  (3,7 GB), o projeto "Soldado ARDY" (cópia do Soldado para o teste do ARDY) e 1042 registros de
+  jobs. Foi `data/tmp/limpar_acervo_2026-10-10.py`. **Antes, cópia de tudo em
+  `E:\backup-ponteanimada-2026-10-10`** (4,1 GB): é de lá que se traz de volta o que fizer falta
+  (as animações do Mixamo do Swat e da Zombiegirl, por exemplo). Não apague essa cópia sem ele
+  mandar. Em 11/10, já na tela nova, ele mesmo excluiu o projeto "Zombiegirl W Kurniawan" (era o
+  mesmo modelo do "Zombiegirl Kimodo"). Ficaram seis: zumbi1, sobrevivente, survivor-parana, Swat,
+  Soldado e Zombiegirl Kimodo. No Soldado estão as duas aprovadas, `idle` e `walk_forward`.
+- **Como foi provado**: o terminal, por `tests/check_terminal.py` (servidor próprio na porta 8767
+  e acervo descartável: abre parado na pasta, recusa quem vem de fora, fecha sozinho, espera
+  quando há algo escrito, reinicia, apaga projeto com o terminal aberto). A tela, num Edge
+  escondido em tempo real, com `tests/ui_click.mjs` (ver "Testes"): entrada com os projetos, o
+  Soldado andando e parado com o relógio correndo, vistas e ossos, e o botão do Mixamo num
+  acervo descartável (um FBX da cópia de segurança entrou na lista em 8 s, abriu sozinho e
+  tocou; o × o apagou). A captura parada do Edge (`--screenshot`) não serve para esta tela: o
+  relógio virtual não espera o GLB nem o terminal.
+- **Em aberto, para combinar com ele**: miniatura do personagem no cartão do projeto (hoje é a
+  inicial do nome); os GLB do Soldado têm 40 MB cada (a textura vai inteira em cada um) e levam
+  uns 4 s para abrir; o que da tela antiga faz falta na nova; tirar do código o Kimodo original
+  e o ARDY, que só a tela antiga mostra.
+- **Encerrar não conhece a animação pronta.** `ponte close` monta o resultado a partir do
+  `.blend` de cada prévia do retarget (`pipeline.close_project`): com uma animação posta por
+  `ponte anim add` sem `--blend` ele recusa ("Prévia sem o arquivo de trabalho"), e com `--blend`
+  não foi testado (não se sabe se o `.blend` de trabalho serve ao `build_result.py`).
+  Isso foi lido no código, não rodado. Enquanto for assim, o que vai do Soldado para o jogo é o
+  GLB de cada animação (`previas/<id>/result.glb`). Não encerre por conta própria, como sempre.
+- **O README foi refeito para esta versão** em 11/10/2026, com a imagem da tela nova
+  (`docs/img/tela-projeto.png`, tirada com o boneco de teste num acervo descartável; não use
+  personagem dele em imagem do repositório, que é público). As seções da tela anterior ficaram
+  juntas, depois de "A tela anterior".
+
+## Estado em 10/10/2026: o kimodo.cpp é o gerador, o ARDY foi desinstalado
+
+No fim do dia 10/10/2026, logo depois de aprovar o parado e o andar do Soldado (o andar veio do
+ARDY), o usuário mandou: "agora instale o kimodo.cpp vamos usar ele de agora em diante" e, com ele
+funcionando, "feche todos os processos do ardy, e delete ele do meu pc, não quero ele tomando
+espaço, mas deixe documentado todos os acertos e erros". Eu tinha avisado antes que o kimodo.cpp
+não faz laço nem direção e velocidade; a decisão foi dele.
+
+- **O kimodo.cpp é o único gerador instalado e o que está em uso** (`ponte engine` mostra `cpp`;
+  eu troquei, porque ele mandou usar esse dali em diante). Está em `D:\kimodo.cpp`, compilado
+  **com Vulkan**: gera na RTX 3060. Medido: 5 s de animação em 33 s pelo programa e 31 s pela
+  ponte, já com o retarget e a prévia; texto novo não custa mais (o codificador de texto roda
+  na placa, dentro desse tempo). Os pesos são 8,7 GB. Como foi instalado: "Dois geradores", abaixo.
+- **O ARDY saiu do PC**: `~/ardy`, os quatro modelos e o cache do pip no Ubuntu (26 GB), e os dois
+  atalhos da Área de Trabalho, por `docs/ardy-setup/ardy-desinstalar.sh`. O `[ardy]` do
+  `ponte.toml` está com `installed = false`. Ficaram: o código da ponte para ele, os scripts de
+  `docs/ardy-setup/`, o registro **`docs/ardy-setup/ACERTOS-E-ERROS.md`** (leia antes de qualquer
+  conversa sobre voltar com ele), e `data/tmp/ardy-guardado/` (os 105 textos já codificados e os
+  clipes de teste). No Ubuntu ficaram o `token` do Hugging Face, o `uv` com o Python 3.11 e o
+  compilador. **O arquivo do disco do Ubuntu, `E:\wsl\Ubuntu\ext4.vhdx`, continuou com 28,5 GB**:
+  só encolhe com `docs/ardy-setup/compactar-disco-do-ubuntu.ps1`, que pede administrador e
+  desliga o WSL; não rodei, ficou para ele.
+- O servidor da ponte foi reiniciado em 11/10/2026, com a tela nova: já lê o `ponte.toml` de
+  agora (ARDY e Kimodo original como não instalados, kimodo.cpp em uso).
+- **Não troque o gerador por conta própria** (`ponte engine ...` vale para o servidor inteiro): a
+  escolha é dele. Para um pedido num gerador específico, `--engine` no `ponte gen`.
+- O Kimodo original continua fora (desinstalado em 08/10/2026, "apague tudo deixe somente a
+  ponte"; ele vinha de achar a qualidade insuficiente). O que saiu naquele dia: `~/kimodo` e os
+  quatro modelos dele no Ubuntu, a imagem `kimodo:1.0` e o cache de construção no Docker, e
+  `C:\Users\dap_p\kimodo-setup`.
+- O que ficou do original: todo o código da ponte para ele, o guia e os scripts de instalação
   em `docs/kimodo-setup/` (o guia é `GUIA-KIMODO.md`), Docker Desktop, Ubuntu, Blender, Visual
-  Studio. Para voltar com o original: seguir o guia e pôr `installed = true` em `[kimodo]` no
-  `ponte.toml`. Para o kimodo.cpp: "Dois geradores", no `README.md`.
-- **O Docker dele tem outro projeto**, o `portalimobiliaria` (banco Postgres e Redis, com
+  Studio. Para voltar com ele: seguir o guia e pôr `installed = true` em `[kimodo]` no
+  `ponte.toml`.
+- **O Docker dele tem outro projeto**, que não é desta ponte (banco Postgres e Redis, com
   volumes de dados). Nunca rode limpeza geral (`docker system prune`, "Purge data"): só o que
   for do Kimodo, pelo nome.
 - **Os discos virtuais do Docker e do Ubuntu moram no E:** desde 08/10/2026, a pedido dele
@@ -33,15 +151,18 @@ de texto).
   `wsl --manage Ubuntu --move`; o do Docker, copiando o arquivo e pondo
   `"CustomWslDistroDir": "E:\\Docker"` em `%APPDATA%\Docker\settings-store.json` (nesta versão,
   4.94, o Docker procura o disco em `<pasta>\disk\`, sem `DockerDesktopWSL`; com a pasta errada
-  ele cria um disco vazio e os volumes "somem"). Há uma cópia dos dados do `portalimobiliaria`
-  daquele dia em `E:\backup-docker-2026-10-08`. Coisa grande vai para o E: (1,7 TB livres, disco
+  ele cria um disco vazio e os volumes "somem"). Há uma cópia dos dados desse outro projeto,
+  daquele dia, em `E:\backup-docker-2026-10-08`. Coisa grande vai para o E: (1,7 TB livres, disco
   rígido comum, mais lento).
 - Apagar arquivo no C: é barrado pela permissão quando o mesmo comando cita `C:\Program Files`
   ou um `C:\...` solto: faça o `Remove-Item` sozinho, com o caminho exato do arquivo.
-- **ARDY** (NVIDIA, julho de 2026, `github.com/nv-tlabs/ardy`): **instalado em 08 e 09/10/2026
+- **ARDY** (NVIDIA, julho de 2026, `github.com/nv-tlabs/ardy`): **desinstalado em 10/10/2026**
+  (ver o estado, acima). O que segue descreve como era enquanto esteve aqui, e como volta a ser
+  se ele reinstalar: **instalado em 08 e 09/10/2026
   no Ubuntu, em `~/ardy`** (ambiente em `.venv`, Python 3.11, PyTorch com CUDA; modelos em
-  `~/.cache/huggingface/hub`, 17 GB). **Ainda não está ligado à ponte**: `ponte gen` continua
-  recusando. Os scripts ficam em `docs/ardy-setup/` e rodam de dentro do Ubuntu
+  `~/.cache/huggingface/hub`, 17 GB) e **ligado à ponte em 09/10/2026** (`[ardy]` no
+  `ponte.toml`, `ponte/ardy.py`, `ardy_scripts/gerar.py`; detalhes em "O ARDY na ponte", abaixo).
+  Os scripts de `docs/ardy-setup/` são os da instalação e dos atalhos, e rodam de dentro do Ubuntu
   (`wsl.exe -d Ubuntu -- bash /mnt/d/PonteAnimada/docs/ardy-setup/<script>`):
   `ardy-gerar-zumbi.sh` (sobe o codificador de texto, gera e encerra), `ardy-gerar.sh` (um
   clipe qualquer, com o codificador já no ar), `ardy-ver.sh` (visualizador em
@@ -56,8 +177,9 @@ de texto).
     chão) e exporta-se a sessão (aba IO, `.pkl` em `~/ardy/.cache/export/`). Roda a 20 quadros
     por segundo na RTX 3060 sem TensorRT (`--no-compile`); um pedido novo leva uns 6 s para
     ser codificado no processador, e os já usados ficam guardados. O demo precisa do
-    codificador como serviço no ar: sozinho ele tenta pô-lo na placa. **A ponte ainda não lê
-    essas sessões**, então o que ele gera ali não chega à Zombiegirl nem à Godot.
+    codificador como serviço no ar: sozinho ele tenta pô-lo na placa. A ponte lê essas sessões
+    desde 09/10/2026 (**Sessões do ARDY**, na aba Prévias): é o caminho para o que ele gera
+    ali chegar à Zombiegirl e à Godot.
   - O codificador de texto (o mesmo Llama 3 do Kimodo) roda no processador: 16 GB de RAM e uns
     3 minutos para carregar; na placa pediria 14 GB e a RTX 3060 daqui tem 12. Com ele no ar o
     Windows fica com 1 a 2 GB livres: avise antes e confira se a Unreal está fechada (em 08/10
@@ -72,8 +194,7 @@ de texto).
     só desliga o Ubuntu se `ardy-no-ar.sh` disser que não há mais nada rodando. Antes de gerar
     ou encerrar algo, rode `ardy-estado.sh` e veja se há janela de atalho aberta.
   - Primeiro clipe (09/10/2026): `~/ardy/outputs/zumbi_andando/`, 3 tomadas do texto em
-    `docs/ardy-setup/ardy-zumbi-andando.txt`. **Falta o veredito dele sobre a qualidade**; só
-    depois disso vale adaptar a ponte.
+    `docs/ardy-setup/ardy-zumbi-andando.txt`. **Falta o veredito dele sobre a qualidade.**
   - **A página do demo foi consertada aqui** (09/10/2026): com dois cliques na barra azul do
     pedido, na linha do tempo, a caixa de edição nascia com a largura do pedido inteiro e o
     texto ficava fora da tela ("aparece preto e a letra some"). O conserto está em
@@ -91,13 +212,160 @@ de texto).
 
 As seções abaixo sobre gerar no Kimodo descrevem como era e como volta a ser se ele reinstalar.
 
+## O ARDY na ponte
+
+É o terceiro gerador (`engines.ENGINES["ardy"]`), com o contrato dos outros (`ardy.generate`).
+
+- **Quem fala com o modelo é `ardy_scripts/gerar.py`**, que roda no ambiente do ARDY, dentro do
+  Ubuntu (`ponte/ardy.py` o chama por `wsl.exe`; os scripts de shell são gravados na hora em
+  `data/tmp/ardy/`, com fim de linha do Linux). Usa `model.autoregressive_step`, como o demo:
+  janelas de 40 quadros (2 s), cada uma partindo do que já existe. Mexer nele não pede reinício
+  do servidor.
+- **Esqueleto Core, 27 juntas, 20 quadros por segundo.** A regra do SOMA 77 é do Kimodo. O
+  clipe entra pelo caminho das capturas (`pipeline._register_ardy_motion`): `ardy.bvh` (já a
+  30 quadros por segundo), `motion.bvh` (nomes do SOMA), `motion.npz` (de onde continuar, a 20)
+  e `stand_height` no registro. No registro, `source` é `"kimodo"` (gerado aqui) e `engine`,
+  `"ardy"`.
+- **Texto novo precisa do codificador (16 GB de RAM)**; texto já usado, não: o script guarda
+  cada texto codificado na pasta do demo (`~/ardy/.cache/text_embeddings`), e os dois se
+  aproveitam. Para um texto novo a ponte sobe o codificador, codifica e o desliga antes de
+  gerar; se já estava no ar (demo aberto, ou **Ligar**), não mexe. **Com a Unreal aberta ou
+  menos de 14 GB livres ela recusa** (`ardy.encoder_blocker`): é a trava para o que aconteceu
+  em 08/10. Os dez textos de exemplo do demo já estão codificados (`A person is walking.`,
+  `A person is standing.`, `A young lady walks forward elegantly.`...): servem para testar sem
+  o codificador.
+- **Medido em 09/10/2026, com gerações de verdade** (RTX 3060, uns 40 s por pedido):
+  - emenda entre passos sem tranco (0,4 a 0,8 cm, dentro do normal do movimento) e o que já
+    foi entregue não muda ao continuar;
+  - andar em laço de 4 s com direção e ritmo: fecha em 0,0 cm, andou 0,80 m/s para 0,8 pedidos;
+  - o passo novo enxerga só 4 quadros do anterior (`CARRY`, o padrão do demo). Com 1 s o
+    movimento novo fica preso ao antigo (chute com metade da altura; "parado" que não parava);
+  - a correção de pé roda nos quadros novos com 1 s de contexto e o desvio some em 0,5 s
+    (`polish`). Corrigir cada passo sozinho dava um tranco de 7 cm na emenda;
+  - o BVH é reamostrado para 30 quadros por segundo passo a passo (`to_project_rate`).
+    Reamostrado como um clipe corrido, o laço saía um quadro curto e pulava 5 cm.
+- **Escreva o que o corpo faz**: `A person is walking.` depois de um passo parado não andou
+  (0,6 m em 5 s, nem com peso 4); `A young lady walks forward elegantly.` andou 5,3 m em 6 s.
+- **Laço depois de um movimento**: o laço fecha na pose em que o passo começa. Um "parado em
+  laço" logo depois de um andar fechou numa pose de meio de passada, dando voltas até lá.
+  Gere antes o passo de entrada (parar), como no Kimodo.
+- **Sessões do demo ao vivo**: `ponte ardy sessions`, `ponte motion import-ardy <projeto>` e
+  **Sessões do ARDY**, na aba Prévias. A sessão vira um roteiro (um passo por texto) e dá para
+  continuar dela. Testado com um arquivo fabricado no formato que o `session_io.py` do demo
+  grava: **falta uma sessão exportada de verdade por ele**.
+- **Não rodado de verdade**: subir o codificador pela ponte, codificar um texto novo e
+  desligar (a Unreal estava aberta em 09/10; só com dublê). Na primeira vez, confira a
+  memória e que ele desligou (`ponte ardy status`).
+- Teste: `tests/check_ardy.py` (dublê no lugar do script do Ubuntu; precisa de Blender).
+
+## O Soldado pelo ARDY: reprovado em 10/10/2026
+
+O usuário pediu a movimentação do Soldado pelo ARDY, sem as do Mixamo, para a Godot ("todas as
+animações"), e depois: "primeiro quero testar todas as animações dentro da ponte, ou seja crie
+um novo projeto do soldado". O projeto novo é `soldado-ardy-121a` (**Soldado ARDY**): o mesmo FBX
+rigado, sem acessório ("a arma vamos arrumar no blender"). O Soldado antigo
+(`tripo-convert-…`) não foi tocado: continua com as 38 do Mixamo e o fuzil.
+
+- **Foram gerados 38 clipes e ele mandou apagar todos.** Vendo os primeiros: "o movimento de
+  pernas deles é muito bom, faça todos". Vendo o pacote: "walk left e right não ficaram legais,
+  ele dá pulinhos, o ideal seria entrelaçar as pernas"; reprovou 7 das 8 disparadas, sem nota;
+  e por fim "por favor pare" e "apague todas as animações, todas estão ruins". O projeto ficou
+  vazio. Do resto ele não disse o que achou ruim: não suponha, pergunte.
+- **Não gere o pacote de novo sem ele pedir.** Se pedir, mostre um clipe de cada tipo (andar,
+  de lado, correr, agachado, parado) e espere o veredito antes de produzir o resto.
+- Os scripts usados ficaram fora do git, em `data/tmp/soldado-ardy/` (`soldado_ardy.py`, que
+  chama `pipeline.generate_motion` e `import_capture`, e `soldado_clip.py`, no Python do Blender).
+- **Uma prévia voltou ao projeto no mesmo dia, a pedido dele: `walk-forward-60a1`.** As animações
+  passaram a ser feitas no Blender (`D:\Blender-Animacoes\Soldado`) e, no andar, ele perguntou
+  "tem como você pegar o movimentar das pernas do ARDY?" e depois pediu "traga toda a animação
+  do ARDY pra cá e nós arrumamos ela". A prévia é a fonte desse trabalho (há cópia em
+  `D:\Blender-Animacoes\Soldado\fontes\`): não é para aprovar na ponte, nem sinal para gerar o
+  resto. A primeira tentativa (`walk-forward-eb92`, "walking while holding a rifle with both
+  hands") saiu mirando e ele cobrou: "fez o prompt errado, ele está mirando, não patrulhando".
+  Da `60a1`, com o texto de arma baixa, ele disse: "ficou excelente, parabéns, só precisa
+  ajustar agora o rifle na mão" (o que o ARDY entrega nas mãos não serve: sem dedos, a mão
+  esquerda por cima da arma e a coronha 2,7 cm dentro do peito; a pegada é refeita no Blender).
+
+O que se aprendeu do ARDY, e vale para outro personagem:
+
+- **Como escrever o texto** (ele pediu: "pesquise melhores formas para evitar erro no prompt").
+  O [guia do Kimodo](https://research.nvidia.com/labs/sil/projects/kimodo/docs/key_concepts/limitations.html),
+  que é o mesmo treino: comece por `A person…`, uma ou duas ações por texto, nem curto demais nem
+  detalhe de parte do corpo, cada texto se basta, e o caminho pedido não pode contradizer o texto.
+  O vocabulário está nas legendas públicas, `nvidia/SEED-Timeline-Annotations` no Hugging Face
+  (`timelines.jsonl`, 80 MB): os conjuntos são `walk_ff_loop_<ângulo>`, `jog_ff_…`, `crouch_ff_…`,
+  "ff" de olhando para frente (180 frente, 225 diagonal, 270 de lado para a direita, 315 e 360
+  para trás), e o lado esquerdo é a cópia espelhada (`_M`), com `left` e `right` trocados na
+  legenda. Lá: `is walking sideways in the right direction at a medium pace in a crisscross
+  manner`, `jogs forward at a steady pace`, `A crouched person walks forward at a slow pace`.
+- **Arma**: o subconjunto público não tem legenda de arma, mas o treino tem. `while aiming a
+  rifle` entrega a pose de mira, e `holding a rifle with both hands` (mesmo com `at waist height`)
+  também: fuzil no ombro, mãos a menos de 10 cm abaixo do ombro. Parado, `pointing it down at
+  the ground`, `carrying` e `stands guard` saíram com a arma erguida do mesmo jeito.
+- **Arma baixa, de patrulha, andando**: sai com `A person is steadily walking forward while
+  carrying a rifle low in front of their waist with both hands, the barrel pointing down at the
+  ground.` (mãos 16 a 22 e 25 a 36 cm abaixo do ombro, cano 22° a 30° para baixo, tronco em pé,
+  o peito girando uns 11° a cada passada). `…holding a rifle at the low ready position` deu quase
+  o mesmo. Sem a palavra fuzil (`holding an object with both hands at waist height`) as mãos
+  ficam baixas, mas na mesma altura. Os dez textos testados e os números estão em
+  `data/tmp/soldado-ardy/provar_patrulha.log`; `soldado_ardy.py probe` testa um texto em 10 s.
+- **A mão da arma depende da direção**, porque metade do treino é espelhada: de lado para a
+  direita sai destro e para a esquerda, canhoto (8 de 8); nas diagonais para a frente, o
+  contrário; para frente e para trás, ao acaso. Espelhar o clipe inteiro conserta frente e trás.
+  O outro lado de cada par só sai destro juntando as pernas e o quadril espelhados com o tronco
+  e os braços do clipe original. Quem é a mão de apoio: a que tem a palma para cima.
+- **Mirando, de lado ele não cruza as pernas**: 4 passadas curtas em 2 s (os "pulinhos"), com os
+  pés sempre a mais de 7 cm um do outro, mesmo com `crisscross` no texto. Sem arma o mesmo texto
+  cruza (pés a −53 cm). Juntar essas pernas com o tronco de mira não chegou a ser mostrado a ele.
+- **Disparada** (5 m/s) de lado e de costas não existe nos dados: a diagonal saiu a 331° em vez
+  de 315° e o pé não para no chão. O correr a 3,4 m/s de lado escorrega 47 a 56 cm/s.
+- **O Ubuntu desliga depois de 1 minuto sem processo**, e aí cada pedido leva 80 s em vez de 10
+  (o modelo é relido do E:). Num lote, deixe um `wsl.exe -d Ubuntu -- sleep <segundos>` solto em
+  segundo plano e encerre-o no fim.
+- **Codifique todos os textos de uma vez** (`ardy._encode_texts` com um `job.json` só de
+  textos): 4,5 minutos para subir o codificador e 5 s por texto. Foram quatro subidas nesse dia.
+
+## Personagem pelo Meshy
+
+Em 09/10/2026 o usuário pediu a ligação com o Meshy em etapas: "vc solicita a api com passo,
+primeiro imagem do solicitado, caso imagem aprovado vc solicita o projeto 3d e já alocada na
+tela". É `ponte/meshy.py` (API REST do Meshy, só biblioteca padrão) e `pipeline.approve_meshy`.
+
+- **Você faz o pedido da imagem; quem aprova é ele.** `uv run ponte meshy image "<em inglês>"
+  --name "<nome em português>"` gera a imagem (3 créditos) e ela aparece em **Pedidos ao
+  Meshy**, na tela de entrada. Avise que ela está lá e pare: **não rode `ponte meshy approve`
+  por conta própria**. O modelo custa dezenas de créditos e só sai com a aprovação dele, pelo
+  botão **Aprovar e gerar o 3D** ou dizendo a você que aprovou.
+- **Reprovada, a nota volta por `ponte status`** (linha `Meshy :`) e por `ponte meshy status`.
+  Refaça com outro texto e `--replace <pedido>`: o reprovado sai da lista quando a imagem nova
+  chega.
+- Descreva o personagem inteiro, de corpo inteiro, sozinho, sem cenário (`full body, single
+  character, plain background`). A pose padrão é `a-pose`, com os braços afastados do corpo,
+  que é o que o rig daqui pede.
+- O modelo aprovado vira **projeto novo**, com laudo, sem esqueleto: o passo seguinte é ele
+  rigar aqui (o QA do rig é dele). A malha vem reduzida a 50 mil triângulos (`--polycount`).
+- A chave fica em `meshy.key`, na raiz (fora do git; `ponte meshy key <chave>`), ou em
+  `MESHY_API_KEY`. Não a ponha em `data/`, que a interface serve, nem no `ponte.toml`.
+- Nada é pago duas vezes: aprovar marca o pedido no clique (`meshy.claim`), e um modelo que já
+  estava sendo gerado é retomado pela tarefa guardada (`model_task`).
+- **Nenhum pedido foi feito ao Meshy de verdade até 09/10/2026** (não havia chave): só com
+  dublê (`tests/check_meshy.py`) e cliques na tela. Na primeira vez, confira a resposta de
+  verdade contra o que o código espera (`image_urls`, `model_urls.glb`, `consumed_credits`).
+- O Meshy tem servidor MCP oficial (`npx add-mcp @meshy-ai/meshy-mcp-server --env
+  MESHY_API_KEY=...`). Não foi instalado: mexe na configuração do Claude Code dele e pula a
+  aprovação da imagem. Só com ele pedindo.
+
 ## Seu papel
 
-Você gera as animações pelo backend (`uv run ponte ...`); o usuário valida na interface.
-O retorno dele chega por `uv run ponte status`: prévias `[REPROVADO]` vêm com a nota
-dizendo o que corrigir. Leia antes de gerar de novo.
+Você faz as animações por trás (o Blender escondido, `uv run ponte ...`) e as põe na lista do
+projeto; o usuário assiste no visor e diz o que achou na própria conversa, que desde 11/10/2026
+costuma ser no terminal da tela do projeto (ver "A tela nova", no alto). A tela nova não tem
+aprovar e reprovar. Se ele usar a tela anterior para isso, o retorno chega por
+`uv run ponte status`: prévias `[REPROVADO]` vêm com a nota dizendo o que corrigir. Leia antes
+de fazer de novo.
 
-Uma animação é um **roteiro**: passos em sequência, num clipe só, cada passo partindo dos
+O que segue, sobre roteiros, vale quando a animação é **gerada por texto** (`ponte gen`). Uma
+animação gerada é um **roteiro**: passos em sequência, num clipe só, cada passo partindo dos
 últimos quadros do anterior. Não gere ações relacionadas como pedidos separados: o usuário
 reprovou isso (os clipes não se ligam e o personagem "teletransporta").
 
@@ -110,11 +378,12 @@ mesmo e trava o passo seguinte enquanto o atual não chega.
 
 ### Quando o usuário descreve uma animação
 
-Ele descreve em português o que quer e você entrega a prévia pronta para validar. O pedido
-costuma chegar pelo botão **Pedir ao Claude** da interface, que abre a conversa com o contexto
-já escrito (`PonteAnimada: animação para o projeto "<nome>" (id <id>).` e, se houver,
-`Prévia aberta: <id>`), seguido do que ele quer. As animações vão para um jogo na **Godot** e
-ele quer resultado fluido, de nível profissional.
+Ele descreve em português o que quer e você entrega a animação na tela, pronta para ele ver. Na
+tela nova o pedido chega pelo terminal do projeto: você foi chamado na pasta dele e o guia de
+lá diz qual é o projeto. Na tela anterior havia o botão **Pedir ao Claude**, que abre a conversa
+com o contexto já escrito (`PonteAnimada: animação para o projeto "<nome>" (id <id>).` e, se
+houver, `Prévia aberta: <id>`), seguido do que ele quer. As animações vão para um jogo na
+**Godot** e ele quer resultado fluido, de nível profissional.
 
 - **Entregue o que ele pediu, e só.** Ele pensa em ações (parado, andando, ouviu barulho,
   ataque), não em roteiros. Pediu quatro coisas simples e recebeu doze passos em três roteiros,
@@ -227,11 +496,35 @@ sem `--engine`. `ponte engine [kimodo|cpp]` mostra e troca.
 - **Não troque o gerador por ele**, nem em teste: a escolha é do servidor inteiro. Em 08/10
   um teste de cliques meu trocou o gerador no mesmo minuto em que ele escolhia. Para testar a
   pergunta, use um segundo servidor num acervo descartável (`PONTE_DATA` + `--port 8766`).
-- O kimodo.cpp ficava em `D:\kimodo.cpp` (`[kimodo_cpp]` no `ponte.toml`; a pasta foi apagada
-  na desinstalação de 08/10/2026), compilado só para o processador, sem Vulkan (a máquina não
-  tem o Vulkan SDK). Medido: uns 30 s para carregar o
-  modelo e 1,8 s por passo de difusão num clipe de 5 s; com os 100 passos da ponte, 3 min e
-  meio. Com o Vulkan SDK instalado e recompilando, usaria a RTX 3060: não foi feito.
+- O kimodo.cpp fica em `D:\kimodo.cpp` (`[kimodo_cpp]` no `ponte.toml`). Da primeira vez (08/10,
+  apagado no mesmo dia) foi compilado só para o processador: uns 30 s para carregar o modelo e
+  1,8 s por passo de difusão num clipe de 5 s; com os 100 passos da ponte, 3 min e meio.
+- **Reinstalado em 10/10/2026 com Vulkan** (o programa usa a placa sozinho quando é compilado
+  assim; `KIMODO_BACKEND=cpu` força o processador): 0,1 s por passo de difusão, 33 s o clipe de
+  5 s contando a carga dos pesos, que acontece a cada pedido. Como foi feito, para repetir:
+  - `git clone --recurse-submodules https://github.com/localai-org/kimodo.cpp D:\kimodo.cpp`
+    (commit `5679ff1`, de 17/09/2026; o `ggml` vem como submódulo);
+  - pesos: `uv run --no-project --with huggingface_hub python scripts/download_gguf_weights.py
+    --output D:/kimodo.cpp --model soma-rp-v1.1` (1,06 GB do movimento, 7,58 GB do codificador
+    de texto Q8 e o `tokenizer.gguf`; sem token do Hugging Face);
+  - Vulkan SDK 1.4.363.0 do site da LunarG, instalado como cópia simples, sem administrador e
+    sem mexer no sistema: `vulkansdk-windows-X64-1.4.363.0.exe --root D:\VulkanSDK\1.4.363.0
+    --accept-licenses --default-answer --confirm-command install copy_only=1` (1,7 GB; só é
+    preciso para compilar, o programa pronto usa o `vulkan-1.dll` do Windows);
+  - com `VULKAN_SDK=D:\VulkanSDK\1.4.363.0` no ambiente e o CMake que vem nas Ferramentas de
+    Build do Visual Studio 2022: `cmake -S D:\kimodo.cpp -B D:\kimodo.cpp\build -G "Visual
+    Studio 17 2022" -A x64 -DKIMODO_ENABLE_VULKAN=ON -DKIMODO_BUILD_TESTS=OFF` e
+    `cmake --build D:\kimodo.cpp\build --config Release --target kmd-generate --parallel 8`
+    (uns 5 minutos, quase tudo nos programas de placa do `ggml`).
+- **Dá para ficar mais rápido**: o `kmd-generate` tem um modo `--server` (lê pedidos da entrada
+  e mantém os pesos na placa), que a ponte ainda não usa. A conta deles: 150 quadros em 4,5 s
+  numa RTX 5070 Ti com tudo carregado.
+- **Texto de arma no Kimodo não é o do ARDY** (cinco testes em 10/10/2026, andando para a
+  frente, 5 s cada; a tira de imagens está em `data/tmp/soldado-ardy/provar_kimodo_cpp.png`):
+  `holding a rifle at the low ready position`, `on patrol with a lowered rifle held in both hands
+  in front of their hips` e `holding an object with both hands at waist height` saíram com as
+  mãos baixas; `carrying a rifle low in front of their waist... the barrel pointing down at the
+  ground` (o texto que deu certo no ARDY) e `...down by their thighs` saíram mirando.
 - É o mesmo modelo (`Kimodo-SOMA-RP-v1.1`). Ele devolve 30 juntas; `ponte/kimodo_cpp.py` as
   grava no SOMA 77 de sempre, com os dedos na pose relaxada fixa que o oficial põe em toda
   animação (molde em `ponte/soma77_relaxed.bvh`). A assinatura do esqueleto é conferida igual.
@@ -248,12 +541,21 @@ sem `--engine`. `ponte engine [kimodo|cpp]` mostra e troca.
 ## Não derrube o trabalho do usuário
 
 O usuário usa a interface enquanto você trabalha. Reiniciar o servidor mata os jobs em
-andamento (já aconteceu: uma geração dele foi interrompida assim).
+andamento (já aconteceu: uma geração dele foi interrompida assim) **e fecha os terminais da
+tela, com a conversa que estiver rodando neles** (a IA que ele chamou ali, que pode ser você
+mesmo: se você está num terminal da tela, parar o servidor encerra a sua própria sessão).
 
 - Só o código em `ponte/` exige reinício. Mudanças em `blender/` e `web/` valem na hora
   (a interface pede Ctrl+R).
+- Antes de reiniciar, olhe `GET /api/terminal`: `talking` lista os projetos em cujo terminal
+  alguém já escreveu. Com algum ali, não reinicie sem ele mandar. O `parar.ps1` não confere
+  isso: só os jobs.
 - Para reiniciar: `scripts\parar.ps1` (recusa com job ativo; não use `-Force` por conta
-  própria) e depois `uv run ponte serve` em segundo plano.
+  própria) e depois `uv run ponte serve` em segundo plano, com a saída em `data\server.log` e
+  `data\server.err.log`, como faz o `scripts\abrir.ps1`.
+- `uv add` e `uv sync` falham com o servidor no ar (o `ponte.exe` fica em uso), e mudar o
+  `pyproject.toml` faz o `uv run` seguinte tentar o mesmo e falhar também (aconteceu em
+  10/10/2026, ao pôr o `pywinpty`). Mexa nas dependências só com o servidor parado.
 - Projetos em `data/` que você não criou são do usuário: não apague.
 - `ponte retarget` (e o *Refazer retarget* da interface) apaga a prévia e grava outra com a
   revisão de volta em `pendente`: a aprovação ou a nota de reprovação do usuário some. Só existe
@@ -282,8 +584,9 @@ andamento (já aconteceu: uma geração dele foi interrompida assim).
 uv run ponte serve                    # API + interface em http://127.0.0.1:8765 (rotas em /api/docs)
 uv run ponte status                   # acervo, fila e as revisões do usuário, com as notas
 uv run ponte gen "..." --dry-run      # confere que o roteiro monta, sem gerar
+uv run ponte anim add <projeto> <arquivo.glb> --name "<nome>"   # põe na tela uma animação feita no Blender
 uv run python tests/check_rigmap.py   # um teste é um script: rode o arquivo (ver Testes)
-npm install --prefix web              # só numa pasta nova: o three.js é servido de web/node_modules
+npm install --prefix web              # só numa pasta nova: o three.js e o xterm.js são servidos de web/node_modules
 ```
 
 Não há build, lint nem formatador no fluxo. O `[tool.ruff]` do `pyproject.toml` só fixa 120
@@ -292,13 +595,14 @@ arquivos inteiros.
 
 ## Arquitetura
 
-Três ambientes de Python que não se importam entre si; conversam por argumentos e arquivos JSON:
+Quatro ambientes de Python que não se importam entre si; conversam por argumentos e arquivos JSON:
 
 | Onde roda | Código | O que tem à mão |
 |---|---|---|
 | venv do `uv`, no Windows | `ponte/` | fastapi, biblioteca padrão |
 | Python embutido do Blender | `blender/*.py` (entradas) e `blender/ponte_bl/` (biblioteca) | `bpy`, numpy |
 | container do Kimodo, no WSL | `kimodo_scripts/gerar.py` | torch, `kimodo` |
+| ambiente do ARDY, no Ubuntu do WSL | `ardy_scripts/gerar.py` | torch, numpy, `ardy` |
 
 - **Camadas do backend**: `store` (registros em arquivo) → `pipeline` (as operações: laudo, rig,
   gerar, retarget, encerrar) → `server` (FastAPI) e `cli`. Toda função de `pipeline` recebe um
@@ -324,7 +628,11 @@ Três ambientes de Python que não se importam entre si; conversam por argumento
   `rigmap.py` não usam `bpy` e são testáveis fora do Blender.
 - **Interface** (`web/`): `app.js` (telas) e `viewer.js` (three.js), sem build nem framework. A
   cada 2 s ela busca `GET /api/state`, que devolve tudo, e redesenha; os arquivos de `data/`
-  saem por `/files/...`.
+  saem por `/files/...`. O terminal usa o xterm.js (`web/node_modules/@xterm`, servido em
+  `/vendor/xterm...`) e um WebSocket por projeto. A tela anterior é uma cópia completa em
+  `web/antiga/` (`index.html`, `app.js`, `style.css`, `viewer.js`): as duas leem a mesma API,
+  então o que muda no formato dos registros tem de ser conferido nas duas (a antiga quebrava
+  ao abrir uma animação pronta, sem as medidas do retarget; consertado em 11/10/2026).
 - **Quando falha**: o log do job fica em `data/jobs/<id>.log`, e o do Blender ao lado da saída
   (`personagem/inspect.log`, `personagem/rig/*.log`, `previas/<id>/retarget.log`). Retarget que
   falha apaga a pasta da prévia com o log junto: aí resta o do job. Encerramento que falha deixa
@@ -347,8 +655,9 @@ Z-para-cima → Y-para-cima (`ponte_bl/props.py`). `tests/check_bake.py` confere
 
 Para o básico (parado, andar, ataque) o usuário decidiu usar as animações prontas do Mixamo: o
 Kimodo precisou de várias tentativas por ação e o resultado não ficou de nível profissional.
-Ele baixa o FBX de lá (não há como baixar por ele: exige a conta Adobe) e importa em
-**Animações Mixamo**, na aba Prévias do projeto, ou `ponte motion import-fbx <projeto> <fbx>`.
+Ele baixa o FBX de lá (não há como baixar por ele: exige a conta Adobe) e importa pelo botão
+**+ Mixamo (.fbx)**, no alto da lista de animações do projeto (na tela anterior: **Animações
+Mixamo**, na aba Prévias), ou `ponte motion import-fbx <projeto> <fbx>`.
 O Kimodo fica para o que o Mixamo não tem.
 
 Por dentro: o arquivo fica em `animacoes/<id>/motion.fbx` (`source: "mixamo"`) e
@@ -567,11 +876,14 @@ Não há pytest. Cada `tests/check_*.py` roda sozinho (`uv run python tests/<arq
 | `check_mixamo.py` | Blender | não toca (`PONTE_DATA` próprio) |
 | `check_capture.py` | Blender | não toca (`PONTE_DATA` próprio) |
 | `check_engine.py` | Blender (o kimodo.cpp é trocado por um dublê) | não toca (`PONTE_DATA` próprio) |
+| `check_ardy.py` | Blender (o script do ARDY é trocado por um dublê) | não toca (`PONTE_DATA` próprio) |
+| `check_meshy.py` | Blender (a rede é trocada por um dublê: não fala com o Meshy) | não toca (`PONTE_DATA` próprio) |
 | `check_bake.py` | Blender, Node e `web/node_modules` | não toca |
 | `check_close.py [--keep <pasta>]` | Blender | não toca (`PONTE_DATA` próprio) |
 | `check_unreal.py [--engine <UnrealEditor-Cmd.exe>] [--keep <pasta>]` | Blender; com `--engine`, a Unreal 5 | não toca (`PONTE_DATA` próprio) |
 | `check_autorig.py <fbx do Mixamo>` | Blender e um FBX rigado pelo Mixamo | não toca |
 | `check_script_dry.py` | Docker ligado, Blender e o Kimodo original instalado (não está desde 08/10/2026) | usa `data/tmp` e ocupa uma vaga do Kimodo |
+| `check_terminal.py` | só Python e Windows (sobe um servidor na porta 8767; leva uns 2 min) | não toca (`PONTE_DATA` próprio) |
 
 `check_adjust.mjs` e `check_props.mjs` são chamados pelo `check_bake.py`, não à mão.
 
@@ -587,15 +899,21 @@ Unreal 5, `tests/check_unreal.py`; para a captura em BVH (e o mapeamento de um e
 Para ver uma prévia sem navegador, cada uma tem `data/projects/<projeto>/previas/<id>/sheet.png`
 (tira de 6 quadros); `blender/render_sheet.py` gera outras vistas (`--view side|front`).
 
+Ao mexer no terminal da tela (`ponte/terminal.py`, as rotas dele), rode `tests/check_terminal.py`.
+
 A interface não tem teste automático. Botão novo, teste com clique de verdade antes de
 entregar: `node tests/ui_click.mjs <url> <pasta> <passos...>` abre a página no Edge, clica
-(`clicktext:<seletor>|<texto>`), lê o relógio do visualizador (`time`), avalia expressões
-(`eval:`) e mostra os erros da página. Já entreguei botões conferidos só por captura parada, e
-o usuário é que achou os problemas. Para uma captura simples, o Edge headless
-(`#asset/<id>`, `#result/<id da prévia>` ou `#final/<id do projeto>` no endereço):
+(`clicktext:<seletor>|<texto>`), escolhe arquivo num campo de envio (`file:<seletor>|<arquivo>`,
+é assim que se prova o botão do Mixamo: `file:#mixamo-input|<animação.fbx>`), lê o relógio do
+visualizador (`time`), avalia expressões (`eval:`), tira retratos (`shot:<nome>`) e mostra os
+erros da página. Na tela nova o endereço é `#p/<projeto>` ou `#p/<projeto>/<animação>`. O que
+grava (importar, apagar) prove num segundo servidor com acervo descartável (`PONTE_DATA` e
+`uv run ponte serve --port 8766`), não no acervo dele. Já entreguei botões conferidos só por
+captura parada, e o usuário é que achou os problemas. Para uma captura simples da tela antiga,
+o Edge headless (`/antiga/#asset/<id>`, `#result/<id da prévia>` ou `#final/<id do projeto>`):
 
 ```bash
 msedge --headless=new --use-angle=swiftshader --enable-unsafe-swiftshader \
   --window-size=1500,950 --virtual-time-budget=60000 --screenshot=out.png \
-  "http://127.0.0.1:8765/#result/<id>"
+  "http://127.0.0.1:8765/antiga/#result/<id>"
 ```

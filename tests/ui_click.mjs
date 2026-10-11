@@ -74,11 +74,13 @@ await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.setWebLifecycleState', { state: 'active' });
 await send('Emulation.setDeviceMetricsOverride', { width: 1500, height: 1000, deviceScaleFactor: 1, mobile: false });
 await send('Page.navigate', { url });
-// Espera o modelo carregar: o relógio do visualizador passa a mostrar o tempo do clipe ("1.23 / 20.00 s · quadro 37").
+// Espera o modelo carregar. Na tela nova o visor avisa (data-visor no body) e a tela de projetos não
+// tem o que esperar; na antiga (/antiga/) o relógio passa a mostrar o tempo do clipe
+// ("1.23 / 20.00 s · quadro 37").
 for (let i = 0; i < 150; i++) {
   await sleep(400);
-  const time = await evaluate("document.querySelector('#time')?.textContent || ''");
-  if (/ s · quadro/.test(time)) break;
+  const ready = await evaluate("document.body.dataset.visor || (!/^#(p|asset|result|final)\\//.test(location.hash) && document.querySelector('#home') && !document.querySelector('#home').hidden ? 'entrada' : '') || (/ s · quadro/.test(document.querySelector('#time')?.textContent || '') ? 'relogio' : '')");
+  if (ready && i > 3) break;
 }
 
 for (const step of steps) {

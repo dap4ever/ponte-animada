@@ -12,3 +12,6 @@ scripts/ponte.ico
 
 # Pastas temporárias de teste
 tests/_*/
+
+# Chave da API do Meshy (ponte meshy key)
+meshy.key

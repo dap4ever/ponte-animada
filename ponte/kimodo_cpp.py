@@ -206,7 +206,7 @@ def generate(work_dir: Path, takes: list[dict], *, steps: int = 100, dry_run: bo
                     still = array.array("f", [0.0, 1.0, 0.0] * sum(frames))
                     write_soma77(still, array.array("f", [0.0, 0.0, 0.0, 1.0] * (sum(frames) * len(JOINTS))), bvh)
                 else:
-                    log(f"gerando no kimodo.cpp: {len(frames)} passo(s), {sum(frames) / FPS:g}s no total (no processador leva alguns minutos)")
+                    log(f"gerando no kimodo.cpp: {len(frames)} passo(s), {sum(frames) / FPS:g}s no total (na placa de vídeo, uns 30 segundos para 5 de animação)")
                     seed = int(take["seed"]) + sample - 1
                     _run([str(files["o programa (kmd-generate.exe)"]), str(files["o modelo de movimento"]), str(files["o text encoder"]), "--sequence", str(TRANSITION_FRAMES), str(steps), str(seed), str(raw), *pairs], log)
                     written = write_soma77(_read_f32(raw / "root_positions.f32"), _read_f32(raw / "local_rotations_xyzw.f32"), bvh)

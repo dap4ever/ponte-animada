@@ -40,13 +40,19 @@ class Settings:
     # kimodo.cpp: a pasta onde foi compilado (vazia: não instalado) e o text encoder baixado.
     cpp_repo: str
     cpp_text_encoder: str
+    # ARDY: instalado no Ubuntu do WSL? Onde, com que usuário, e onde o codificador de texto dele responde.
+    ardy_installed: bool
+    ardy_distro: str
+    ardy_user: str
+    ardy_repo: str
+    ardy_encoder_url: str
     host: str
     port: int
 
 
 def load_settings() -> Settings:
     raw = tomllib.loads((ROOT / "ponte.toml").read_text(encoding="utf-8"))
-    kimodo, cpp, server = raw.get("kimodo", {}), raw.get("kimodo_cpp", {}), raw.get("server", {})
+    kimodo, cpp, ardy, server = raw.get("kimodo", {}), raw.get("kimodo_cpp", {}), raw.get("ardy", {}), raw.get("server", {})
     return Settings(
         blender_exe=raw["blender"]["exe"],
         wsl_distro=kimodo.get("distro", "Ubuntu"),
@@ -57,6 +63,11 @@ def load_settings() -> Settings:
         kimodo_installed=bool(kimodo.get("installed", True)),
         cpp_repo=cpp.get("repo", ""),
         cpp_text_encoder=cpp.get("text_encoder", "Llama-3-Kimodo-Q8_0.gguf"),
+        ardy_installed=bool(ardy.get("installed", False)),
+        ardy_distro=ardy.get("distro", "Ubuntu"),
+        ardy_user=ardy.get("user", ""),
+        ardy_repo=ardy.get("repo", "~/ardy"),
+        ardy_encoder_url=ardy.get("text_encoder_url", "http://127.0.0.1:9550/"),
         host=server.get("host", "127.0.0.1"),
         port=int(server.get("port", 8765)),
     )

@@ -17,11 +17,25 @@ text_encoder_url = "http://localhost:9550/"
 # são regras fixas do projeto, definidas em ponte/config.py.
 
 [kimodo_cpp]
-# O outro gerador: o mesmo modelo do Kimodo compilado para Windows, sem Docker
-# (https://github.com/localai-org/kimodo.cpp). Ao abrir a ponte, a interface pergunta qual usar.
-# Tambem desinstalado em 08/10/2026 (a pasta foi apagada). Para voltar: "Dois geradores", no README.
+# O gerador em uso desde 10/10/2026, a pedido do usuario ("vamos usar ele de agora em diante"):
+# o mesmo modelo do Kimodo compilado para Windows, sem Docker (https://github.com/localai-org/kimodo.cpp).
+# Reinstalado nesse dia, agora compilado com Vulkan: gera na placa de video (5 s de animacao em uns 30 s).
+# O Vulkan SDK usado para compilar esta em D:/VulkanSDK (copia simples, sem instalar no sistema).
 repo = "D:/kimodo.cpp"
 text_encoder = "Llama-3-Kimodo-Q8_0.gguf"
+
+[ardy]
+# O ARDY (NVIDIA, tempo real) esteve instalado no Ubuntu do WSL de 08 a 10/10/2026. Desinstalado em
+# 10/10/2026, a pedido do usuario, para liberar espaco (docs/ardy-setup/ardy-desinstalar.sh).
+# O que deu certo e o que deu errado com ele: docs/ardy-setup/ACERTOS-E-ERROS.md.
+# Para voltar: os scripts de docs/ardy-setup/ (root, prep, install, modelos) e installed = true.
+installed = false
+distro = "Ubuntu"
+user = "dap_p"
+repo = "~/ardy"
+# O codificador de texto dele (uns 16 GB de RAM). So texto novo precisa dele: a ponte o sobe
+# para codificar e desliga em seguida.
+text_encoder_url = "http://127.0.0.1:9550/"
 
 [server]
 host = "127.0.0.1"

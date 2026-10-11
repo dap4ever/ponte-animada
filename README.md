@@ -4,47 +4,59 @@
 
 # PonteAnimada
 
-Ferramenta local, para Windows, que leva um personagem 3D do arquivo cru até o arquivo pronto
-para o jogo, com todas as animações dentro. Ela é a **ponte** entre o **Blender** (que examina
-o personagem e aplica as animações nele), um **gerador de animação por texto** (o
-[Kimodo](https://github.com/nv-tlabs/kimodo), da NVIDIA) e **você**, que assiste a cada
-animação no navegador e aprova ou reprova.
+Ferramenta local, para Windows, para dar animações a um personagem 3D e assistir a cada uma no
+navegador. Cada personagem é um projeto, e a tela do projeto tem três coisas:
 
-Os personagens entram com ou sem esqueleto. As animações são geradas no Kimodo, baixadas do
-Mixamo ou vêm de captura de movimento. O Blender as aplica no personagem e você valida cada
-uma. Quando o personagem está completo, você o encerra e sai o resultado: um arquivo só, com
-todas as animações.
+- um **visor 3D** com o personagem texturizado, parado ou animado;
+- a **lista de animações** dele;
+- um **terminal** aberto na pasta do projeto, onde você chama a IA que quiser (o Claude Code ou
+  outra) e pede a animação em português.
 
-> *In English:* a local Windows tool (interface in Portuguese) that takes a 3D character from
-> raw file to a game-ready GLB/FBX with all its animations. Blender inspects, rigs and
-> retargets; motion comes from text-to-motion (Kimodo), Mixamo FBX or BVH mocap; a human
-> reviews every clip in the browser.
+A IA trabalha no **Blender**, que roda escondido, e põe o resultado na lista. Você assiste no
+visor ao lado e diz o que achou. É essa a **ponte**: entre você, a IA e o Blender.
 
-![Tela de uma prévia: o boneco de teste andando, com os botões de validação e as medidas do retarget](docs/img/tela-previa.png)
+As animações também vêm prontas do Mixamo (por um botão), de um gerador por texto (o
+[Kimodo](https://github.com/nv-tlabs/kimodo), da NVIDIA) ou de captura de movimento. O Blender
+as aplica no personagem, seja qual for o esqueleto dele.
 
-*A tela de uma prévia: a caminhada de exemplo aplicada no boneco de teste, com os botões de
-validação e as medidas do retarget à direita.*
+> *In English:* a local Windows tool (interface in Portuguese) to animate a 3D character and
+> review every clip in the browser. Each character is a project with a 3D viewport, its
+> animation list and a terminal opened in the project folder, where you call the AI assistant
+> of your choice (Claude Code or another) to build animations in a headless Blender. Motion can
+> also come from Mixamo FBX, text-to-motion (Kimodo) or BVH mocap; Blender inspects, rigs and
+> retargets.
+
+![A tela de um projeto: o boneco de teste andando no visor, a lista de animações e o terminal na pasta do projeto](docs/img/tela-projeto.png)
+
+*A tela de um projeto: a caminhada de exemplo no boneco de teste, a lista de animações e o
+terminal, parado na pasta do projeto.*
 
 ## O que ele faz
 
+- **Mostra o personagem e as animações.** Visor 3D no navegador, com a textura: vistas de
+  frente, lado, trás e cima, tocar e pausar, barra de tempo, velocidade, esqueleto à mostra.
+- **Abre um terminal na pasta de cada projeto.** É um PowerShell de verdade, dentro da tela, e
+  vem parado: você chama ali a IA que preferir. A pasta tem um guia (`CLAUDE.md` e `AGENTS.md`)
+  que diz a ela onde está, como rodar o Blender escondido e como pôr a animação na tela.
+- **Recebe animação feita no Blender.** Um GLB com o personagem já animado entra na lista com
+  um comando (`ponte anim add`), e a tela o mostra em seguida.
+- **Aproveita animação pronta**: FBX do Mixamo, por um botão, e captura de movimento em BVH.
+- **Aplica a animação no personagem** (retarget), seja qual for o esqueleto dele. Reconhece os
+  nomes de osso mais comuns: Mixamo, Unreal, Unity, Blender, VRM e Biped.
 - **Examina o personagem.** Aceita FBX, GLB, BLEND, OBJ ou um ZIP com o modelo e as texturas.
   O Blender faz um laudo: tipo de esqueleto, ossos reconhecidos, pose de descanso, escala,
   pesos e texturas.
-- **Riga quem chega sem esqueleto**, no padrão do Mixamo, a partir de 8 marcadores que você
-  ajusta na tela.
-- **Gera animação a partir de texto.** Um roteiro em inglês, escrito um passo de cada vez, com
-  transição entre os passos, laço, direção e caminho desenhado no chão.
-- **Aproveita animação pronta**: FBX do Mixamo e captura de movimento em BVH.
-- **Aplica a animação no personagem** (retarget), seja qual for o esqueleto dele. Reconhece os
-  nomes de osso mais comuns: Mixamo, Unreal, Unity, Blender, VRM e Biped.
-- **Mostra para validar.** Visualizador 3D no navegador, aprovar ou reprovar com notas, ajuste
-  de pose, arma e acessórios presos ao osso.
-- **Entrega um arquivo só.** GLB, FBX e BLEND com o personagem, as texturas, os acessórios e
-  todas as animações que você não reprovou. Como opção, mais um FBX no esqueleto do Mannequin,
-  para a Unreal 5.
+- **Gera animação a partir de texto**, com um gerador instalado: um roteiro em inglês, um
+  passo de cada vez, com transição entre os passos.
+- **Pede o personagem ao Meshy**: primeiro a imagem, que você aprova, e só então o modelo 3D.
+- **Na tela anterior**, que continua disponível: rigar quem chega sem esqueleto, aprovar e
+  reprovar com notas, ajustar a pose, prender arma e acessórios, e encerrar o personagem num
+  arquivo só (GLB, FBX e BLEND, com um FBX para a Unreal 5 como opção).
 
-Tudo roda na sua máquina. Não há conta, nuvem nem banco de dados: o que a ponte sabe está em
-arquivos, na pasta `data/`.
+A ponte roda inteira na sua máquina. Para a internet só vai o que você chamar: a IA do terminal
+e, se quiser, o Meshy, que é um serviço pago. Não há conta nem banco de dados: o que a ponte
+sabe está em arquivos, na pasta `data/`. O servidor só atende ao próprio computador
+(`127.0.0.1`).
 
 ## Como funciona
 
@@ -52,35 +64,43 @@ arquivos, na pasta `data/`.
 flowchart LR
     subgraph PERS["O personagem"]
         P["Arquivo<br/>FBX, GLB, BLEND, OBJ ou ZIP"] --> L["Laudo<br/>(Blender)"]
-        L -- "sem esqueleto" --> R["Rig no padrão Mixamo<br/>(Blender)"]
+        Y["Meshy<br/>imagem aprovada vira modelo"] --> L
     end
     subgraph ANIM["A animação"]
-        K["Kimodo<br/>texto em inglês"]
+        A["IA chamada no terminal<br/>trabalha no Blender escondido"]
         M["Mixamo<br/>FBX"]
+        K["Gerador por texto<br/>em inglês"]
         C["Captura de movimento<br/>BVH"]
     end
     L -- "pronto para animar" --> T["Retarget<br/>(Blender)"]
+    L -- "sem esqueleto" --> R["Rig no padrão Mixamo<br/>(Blender, pela tela anterior)"]
     R --> T
-    K --> T
     M --> T
+    K --> T
     C --> T
-    T --> V["Prévia<br/>você aprova ou reprova"]
-    V -- "encerrar o personagem" --> F["Resultado<br/>GLB, FBX e BLEND"]
+    T --> V["Lista de animações<br/>você assiste no visor"]
+    A -- "GLB pronto, com ponte anim add" --> V
 ```
 
-Uma prévia reprovada volta com as suas notas para quem gera a animação. Ao encerrar, o
-resultado pode levar também um FBX para a Unreal 5.
+O que você acha de cada animação é dito à IA, no terminal, e ela refaz. Uma animação de cada
+vez funciona melhor do que um pacote inteiro de uma vez.
 
 ## Estado do projeto
 
 Projeto pessoal, em uso, feito para levar personagens animados a um jogo na Godot. Vale saber
 antes de instalar:
 
-- **Windows.** Feito e usado no Windows 11. Os atalhos, os scripts de abrir e parar e a ligação
-  com o Kimodo (que roda no WSL) dependem dele. Em outro sistema não foi testado.
-- **O gerador de animação não vem junto.** O Kimodo é instalado à parte e pede uma máquina
-  forte (veja [Requisitos](#requisitos)). Sem gerador a ponte serve para todo o resto: receber
-  e rigar personagem, importar animação do Mixamo e captura, validar, ajustar e encerrar.
+- **A tela é nova.** Foi refeita em 11/10/2026 para ficar só com o visor, as animações e o
+  terminal. É a primeira versão. A tela anterior, mais completa (laudo, rig, roteiro, revisão,
+  ajuste de pose, acessórios, encerrar), continua inteira em `/antiga/`: veja
+  [A tela anterior](#a-tela-anterior).
+- **Windows.** Feito e usado no Windows 11. O terminal da tela, os atalhos, os scripts de abrir
+  e parar e a ligação com o Kimodo (que roda no WSL) dependem dele. Em outro sistema não foi
+  testado.
+- **A IA e o gerador de animação não vêm juntos.** A IA do terminal é a que você tiver
+  instalada. O gerador por texto é instalado à parte e pede uma máquina forte (veja
+  [Requisitos](#requisitos)). Sem os dois a ponte serve para o resto: receber personagem,
+  importar animação do Mixamo e captura, e ver tudo no visor.
 - **Em português**: a interface, a linha de comando e as mensagens.
 - O que já foi conferido e o que ainda não foi está, sem enfeite, em
   [Limites conhecidos](#limites-conhecidos).
@@ -89,10 +109,12 @@ antes de instalar:
 
 | Para | Precisa de |
 |---|---|
-| Rodar a ponte | Windows, [uv](https://docs.astral.sh/uv/) (ele baixa o Python sozinho), [Blender](https://www.blender.org/) 5.2 e [Node.js](https://nodejs.org/) (só para baixar o three.js) |
+| Rodar a ponte | Windows, [uv](https://docs.astral.sh/uv/) (ele baixa o Python sozinho), [Blender](https://www.blender.org/) 5.2 e [Node.js](https://nodejs.org/) (só para baixar o three.js e o xterm.js) |
 | Abrir em janela própria | Microsoft Edge. Sem ele, a interface abre no navegador padrão |
+| Pedir animação a uma IA | uma IA de linha de comando instalada, como o [Claude Code](https://claude.com/claude-code). Sem ela, o terminal da tela é só um PowerShell na pasta do projeto |
 | Gerar com o Kimodo original | Docker Desktop, WSL 2 com Ubuntu e placa NVIDIA. O text encoder ocupa uns 17 GB de RAM; no disco, 35 GB da imagem do Docker e 17 GB de modelos |
 | Gerar com o kimodo.cpp | Visual Studio 2022 com CMake, para compilar, e uns 9 GB de pesos |
+| Gerar com o ARDY | WSL 2 com Ubuntu e placa NVIDIA. O codificador de texto ocupa uns 16 GB de RAM, só enquanto codifica um texto novo; no disco, 17 GB de modelos |
 | Arquivo para a Unreal 5 | só o Blender. A Unreal entra apenas se você quiser rodar o teste que importa nela |
 
 Os números do Kimodo foram medidos numa máquina com 32 GB de RAM e uma RTX 3060 de 12 GB.
@@ -103,23 +125,24 @@ Os números do Kimodo foram medidos numa máquina com 32 GB de RAM e uma RTX 306
 git clone https://github.com/dap4ever/ponte-animada.git
 cd ponte-animada
 uv sync                     # o backend (cria o .venv)
-npm install --prefix web    # o three.js, servido direto de web/node_modules
+npm install --prefix web    # o three.js e o xterm.js, servidos direto de web/node_modules
 ```
 
 Depois:
 
-1. Abra o `ponte.toml` e ponha em `[blender] exe` o caminho do `blender.exe` da sua máquina.
+1. Abra o `ponte.toml`, que no repositório é o da máquina do autor. Ponha em `[blender] exe` o
+   caminho do `blender.exe` da sua máquina e, em `[kimodo_cpp]`, deixe `repo = ""` (ou aponte
+   para onde você compilou o kimodo.cpp).
 2. Rode `uv run ponte serve` e abra <http://127.0.0.1:8765>.
 3. Se quiser um atalho na Área de Trabalho, rode uma vez
    `powershell -ExecutionPolicy Bypass -File scripts\criar-atalho.ps1`.
 
-O `ponte.toml` vem com os geradores desligados. Para ligar um, veja
-[Geradores de animação](#geradores-de-animação).
+Para ligar um gerador por texto, veja [Geradores de animação](#geradores-de-animação).
 
 ### Ver funcionando sem gerador
 
 O repositório traz um boneco de teste e uma caminhada de exemplo. Com eles dá para ver uma
-prévia na tela sem instalar o Kimodo:
+animação na tela sem instalar gerador nem IA (é a imagem do alto desta página):
 
 ```powershell
 uv run ponte fixture        # cria o projeto "Boneco de teste" e mostra o id dele
@@ -139,17 +162,25 @@ ou aplicada). Se mover a pasta do projeto, rode `scripts\criar-atalho.ps1` para 
 
 **Usar**
 
-- [Fluxo](#fluxo)
+- [A tela](#a-tela)
+- [O terminal e a IA](#o-terminal-e-a-ia)
+- [Animação feita no Blender](#animação-feita-no-blender)
+- [Animações do Mixamo](#animações-do-mixamo)
+- [Personagem pelo Meshy](#personagem-pelo-meshy)
+- [Capturas de movimento (BVH)](#capturas-de-movimento-bvh)
+- [Texturas](#texturas)
+- [Linha de comando](#linha-de-comando)
+
+**A tela anterior**
+
+- [A tela anterior](#a-tela-anterior)
+- [Fluxo na tela anterior](#fluxo-na-tela-anterior)
 - [Projetos, prévias e resultado](#projetos-prévias-e-resultado)
 - [Rigar aqui (padrão Mixamo)](#rigar-aqui-padrão-mixamo)
 - [Roteiro: uma animação com começo, meio e transições](#roteiro-uma-animação-com-começo-meio-e-transições)
-- [Animações do Mixamo](#animações-do-mixamo)
-- [Capturas de movimento (BVH)](#capturas-de-movimento-bvh)
 - [Ajustar a pose](#ajustar-a-pose)
 - [Arma e acessórios](#arma-e-acessórios)
-- [Texturas](#texturas)
 - [Unreal 5](#unreal-5)
-- [Linha de comando](#linha-de-comando)
 
 **Entender e mexer**
 
@@ -159,7 +190,228 @@ ou aplicada). Se mover a pasta do projeto, rode `scripts\criar-atalho.ps1` para 
 - [Limites conhecidos](#limites-conhecidos)
 - [Pastas](#pastas)
 
-## Fluxo
+## A tela
+
+A tela foi refeita em 11/10/2026 para ficar só com o que é usado. É a primeira versão.
+
+**Entrada.** Um cartão por projeto (cada personagem é um projeto), o cartão *Novo personagem*,
+os pedidos ao Meshy e o que estiver rodando. O **×** no canto do cartão exclui o projeto, com
+confirmação. Arrastar um modelo para a janela (FBX, GLB, BLEND, OBJ ou um ZIP com as texturas)
+cria um projeto.
+
+**Projeto.** Três partes:
+
+- **Visor 3D**, à esquerda: o personagem com a textura, parado ou tocando a animação escolhida.
+  Botões de vista (*Frente*, *Lado*, *Trás*, *Cima*), tocar e pausar (ou Espaço), barra de
+  tempo, velocidade, e as opções *Seguir* (a câmera acompanha o personagem), *Parado* (tira o
+  deslocamento, só para ver), *Ossos* e *Malha*. O mouse gira, aproxima e arrasta a vista.
+  Trocar de animação não mexe na câmera, para comparar do mesmo ângulo.
+- **Animações**, à direita: *Modelo parado* e uma linha por animação, com a duração e de onde
+  veio (Mixamo, Blender, captura, importada ou gerada). Clique para ver; dois cliques mudam o
+  nome; o **×** apaga. Animação que chega com a tela aberta abre sozinha no visor. O botão
+  **+ Mixamo (.fbx)** importa as baixadas do Mixamo
+  ([Animações do Mixamo](#animações-do-mixamo)).
+- **Terminal**, embaixo da lista: um PowerShell de verdade, já na pasta do projeto.
+
+A divisória entre o visor e o lado direito arrasta. O endereço guarda o projeto e a animação
+abertos (`#p/<projeto>/<animação>`): recarregar a página volta ao mesmo lugar.
+
+### O terminal e a IA
+
+O terminal **vem parado**: ele não chama nada sozinho. Você digita o comando da IA que quiser
+usar (`claude`, por exemplo) e conversa com ela ali, olhando o visor.
+
+- **O guia da pasta.** Ao abrir o terminal, a ponte grava na pasta do projeto um guia com dois
+  nomes, `CLAUDE.md` (o que o Claude Code lê) e `AGENTS.md` (o que o Codex, o opencode e outras
+  leem), com o mesmo texto: quem está escrevendo, onde está o personagem, como rodar o Blender
+  sem janela e como pôr a animação na tela. Cada um é regravado a cada abertura enquanto
+  começar pela linha de marca: apague essa linha e a ponte não toca mais naquele arquivo. O que
+  for só daquele personagem vai num `NOTAS.md` escrito à mão na mesma pasta. A ponte nunca o
+  grava, e o guia passa a apontar para ele.
+- **O Blender roda escondido**, comandado pela IA. Você não abre o Blender: o que você vê é o
+  visor.
+- **O terminal não fica para trás à toa.** Se ninguém escreveu nele, fecha sozinho 20 segundos
+  depois de você sair do projeto. Com algo escrito, ele espera a sua volta: trocar de projeto,
+  recarregar ou fechar a janela só solta a tela, e ao voltar o que estava escrito reaparece.
+  Ele só fecha depois de 3 horas calado sem ninguém olhando, quando você clica em *reiniciar*
+  ou quando o servidor para.
+- **Parar o servidor fecha os terminais**, com a conversa que estiver rodando neles. No Claude
+  Code, `claude --continue` num terminal novo retoma a anterior.
+- **Um terminal na página é um shell na sua máquina.** Ele só atende à própria página da ponte:
+  o pedido tem de vir de `127.0.0.1` ou `localhost`, na mesma porta, e trazer uma senha
+  sorteada a cada vez que o servidor sobe. Não ponha o servidor para escutar fora do
+  `127.0.0.1`.
+
+### Animação feita no Blender
+
+Uma animação pronta entra na lista sem passar pelo retarget. É o caminho da IA do terminal, e
+serve também para o que você mesmo fizer no Blender:
+
+1. Exporte um **GLB** com o personagem (e os acessórios) já animado, uma ação por arquivo,
+   começando no tempo 0. No exportador de glTF do Blender é a opção
+   `export_anim_slide_to_zero`: sem ela o laço ganha um quadro parado.
+2. Rode `uv run ponte anim add <projeto> <arquivo.glb> --name "<nome>"`.
+
+Ela entra na lista em até 2 segundos, e abre sozinha se o projeto estiver na tela. `--replace`
+troca a de mesmo nome; `--blend <arquivo>` guarda junto o arquivo do Blender de onde ela saiu.
+O GLB é mostrado como veio: nada nele é conferido nem corrigido.
+
+## Animações do Mixamo
+
+Para as ações que o Mixamo já tem prontas (parado, andar, ataque…), não é preciso gerar: baixe
+a animação de lá em FBX e, no projeto do personagem, clique **+ Mixamo (.fbx)**, no alto da
+lista de animações (dá para escolher vários de uma vez). O Blender aplica cada arquivo no
+personagem do projeto, por trás, e ele vira uma animação com o nome do arquivo: entra na lista
+quando o Blender termina (8 segundos num personagem leve, mais com texturas grandes) e abre
+sozinha no visor.
+
+A animação passa pelo mesmo retarget das do Kimodo, então serve em qualquer personagem, tenha
+ele ou não o esqueleto do arquivo, e tanto faz baixar com ou sem a malha (*With Skin* /
+*Without Skin*). Tudo é amostrado a 30 quadros por segundo. Soltar um FBX na janela com um
+projeto aberto pergunta se ele é uma animação do Mixamo ou um personagem novo.
+
+Pela linha de comando: `uv run ponte motion import-fbx <projeto> "Zombie Idle.fbx"`. Na tela
+anterior, é o botão **Importar FBX**, em **Animações Mixamo**, na aba *Prévias*.
+
+## Personagem pelo Meshy
+
+O [Meshy](https://www.meshy.ai) gera o modelo 3D do personagem a partir de uma imagem. Na ponte
+isso acontece em **duas etapas, com a sua aprovação no meio**, para não gastar créditos num
+modelo que você não quer:
+
+1. **A imagem.** Quem faz o pedido (a IA do terminal, pela linha de comando, ou a API) descreve
+   o personagem em inglês e o Meshy devolve uma imagem dele, em pose A ou T. Custa 3 créditos.
+   Ela aparece em **Pedidos ao Meshy**, na tela de entrada.
+2. **O modelo 3D.** Você olha a imagem (clicar nela abre inteira) e escolhe **Aprovar e gerar o
+   3D** ou **Reprovar**, com uma nota dizendo o que mudar. Só a aprovada vira modelo: leva
+   alguns minutos, custa dezenas de créditos e chega como **projeto novo**, já com o laudo.
+   O modelo vem sem esqueleto: é só rigar, pela tela anterior
+   ([Rigar aqui](#rigar-aqui-padrão-mixamo)).
+
+```powershell
+uv run ponte meshy key msy_...                       # guarda a chave (uma vez); mostra os créditos
+uv run ponte meshy image "A zombie woman, full body, torn clothes, game character" --name "Zumbi"
+uv run ponte meshy status                            # os pedidos; a nota de um reprovado diz o que mudar
+uv run ponte meshy image "..." --name "Zumbi" --replace <pedido>   # refaz um reprovado
+uv run ponte meshy approve <pedido>                  # o mesmo que o botão da tela
+uv run ponte meshy reject <pedido> --note "sem capuz"
+```
+
+- **A chave** é criada em <https://www.meshy.ai/developers/keys> (a API exige plano pago). Fica
+  em `meshy.key`, na raiz do projeto, fora do git e fora do que a interface serve; a variável
+  `MESHY_API_KEY` também vale.
+- **A malha chega reduzida** a 50 mil triângulos (`--polycount`, em `approve`; 0 deixa como o
+  Meshy gerar, que passa de 800 mil e deixa o Blender lento).
+- **Se algo cai no meio**, nada é pago duas vezes: a imagem aprovada continua aprovável, e um
+  modelo que o Meshy já estava gerando é retomado (**Retomar**, no cartão).
+- **Pela API da ponte**: `POST /api/meshy/requests` (a imagem), `POST
+  /api/meshy/requests/<id>/approve`, `.../reject` e `DELETE /api/meshy/requests/<id>`.
+- **Pelo MCP oficial do Meshy**, para quem prefere que o assistente fale direto com ele, sem a
+  ponte no meio: `npx add-mcp @meshy-ai/meshy-mcp-server --env MESHY_API_KEY=msy_...`. Aí o
+  modelo baixado entra na ponte como qualquer arquivo (`uv run ponte asset add modelo.glb`).
+
+## Capturas de movimento (BVH)
+
+Captura de movimento pronta, em BVH de qualquer esqueleto humanoide (XSens, conjuntos abertos
+como a [100STYLE](https://www.ianxmason.com/100style/)), entra pela linha de comando:
+
+```powershell
+uv run ponte motion import-capture <projeto> DragLeftLeg_FW.bvh --label "Andar arrastando a perna" `
+    --start 7.15 --end 168.55 --loop --credit "The 100STYLE Dataset - Ian Mason (CC BY 4.0)"
+```
+
+- `--start` e `--end` recortam a tomada, em segundos do arquivo (quadro ÷ quadros por segundo).
+- `--loop` fica só com o melhor laço do recorte e o fecha: procura o trecho em que o fim mais
+  repete o começo (num andar, uma passada), tira aos poucos o giro que o ator fez nele e
+  reparte pelo trecho a diferença que sobra. `--loop 2.4 3.4` pede outra duração, em segundos
+  (padrão: de 0,6 a 4). Um laço que anda sai reto, na direção de `--direction` (padrão: a mais
+  próxima entre frente, lados e trás).
+- `--credit` guarda o crédito que a licença do arquivo pede; ele aparece na tela da animação.
+
+A captura vira uma animação do personagem, como as do Mixamo, e aparece na lista do projeto
+(na tela anterior, em **Capturas de movimento**, na aba *Prévias*). Na pasta da animação ficam
+o arquivo como veio (`captura.bvh`) e o convertido (`motion.bvh`: nomes do SOMA 77,
+centímetros, 30 quadros por segundo), que é o que o retarget e as medidas (`step_stats.py`)
+leem. Ainda não há campo na interface para isto.
+
+## Texturas
+
+O personagem aparece texturizado no visor, nas animações e no resultado (GLB, FBX, BLEND).
+
+- **Embutidas no arquivo** (GLB; FBX com mídia embutida; BLEND com recursos empacotados):
+  não precisa fazer nada.
+- **Em arquivos separados**: selecione o modelo **junto com as texturas**, ou arraste a
+  **pasta inteira** para a janela — as subpastas são mantidas. Dá também para acrescentar
+  depois, soltando as imagens na janela com o projeto aberto (na tela anterior há também o
+  botão *Adicionar texturas*).
+- **Modelo que não referencia as texturas**: elas são aplicadas pelo nome do arquivo, que
+  precisa conter o nome do material e o papel — `Corpo_BaseColor.png`, `Corpo_Normal.png`,
+  `Corpo_Roughness.png`, `Corpo_Metallic.png`. Se o modelo tem um material só, basta o papel.
+
+O laudo diz o que foi encontrado, o que faltou e o que foi deduzido. Um ajuste é automático:
+material marcado como transparente cuja textura tem o canal alfa todo opaco volta a ser opaco
+(senão o personagem renderiza "falhado", com faces de trás aparecendo na frente).
+
+Animações aplicadas antes de as texturas chegarem não mudam sozinhas: refaça com
+`uv run ponte retarget <projeto> <animacao>` (ou *Refazer retarget*, na tela anterior).
+
+## Linha de comando
+
+É por onde a IA do terminal trabalha, e por onde você faz o mesmo à mão. Tudo que ela faz
+aparece na interface, e ela funciona mesmo com o servidor fora do ar. Rigar, ajustar a pose e
+posicionar acessórios são só pela tela anterior.
+
+`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`).
+
+```powershell
+uv run ponte serve                       # a interface, em http://127.0.0.1:8765 (rotas da API em /api/docs)
+uv run ponte status                      # projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
+uv run ponte asset add personagem.fbx    # cria o projeto e faz o laudo
+uv run ponte asset add personagem.fbx --textures pasta_das_texturas
+uv run ponte asset textures <projeto> cor.png normal.png   # acrescenta texturas e refaz o laudo
+uv run ponte asset show <projeto>        # laudo e mapeamento de ossos
+# Roteiro, um passo de cada vez: gere, confira a prévia e só então o próximo, com --continue.
+uv run ponte gen "stands still, breathing." --premise "A zombie" --duration 6 --asset <projeto>
+uv run ponte gen "walks forward slowly." --premise "A zombie" --duration 5 --continue <animacao> --asset <projeto>
+# Refazer o último passo: parte da animação anterior e toma o lugar da que saiu errada.
+uv run ponte gen "shuffles forward." --premise "A zombie" --duration 5 --continue <anterior> --replace <errada> --asset <projeto>
+# Passo em laço (termina na pose em que começou); --text-weight para um gesto mais marcado.
+uv run ponte gen "sways from side to side." --premise "A zombie" --duration 6 --loop --text-weight 4 --continue <animacao> --asset <projeto>
+uv run ponte gen "..." --dry-run         # só confere que o roteiro monta; não gera nada
+# Animação pronta: FBX do Mixamo, captura em BVH, ou um BVH do Kimodo que já existe.
+uv run ponte motion import-fbx <projeto> "Zombie Idle.fbx"
+uv run ponte motion import-capture <projeto> captura.bvh --loop
+uv run ponte motion import <projeto> animacao.bvh
+uv run ponte anim add <projeto> animado.glb --name "idle" [--replace]   # GLB com o personagem já animado (feito no Blender): entra na lista sem retarget
+uv run ponte motion list                 # as animações, com o id de cada uma
+uv run ponte motion label <animacao> --name "Reações" --steps "agitado" "vira"   # nome do roteiro e dos passos
+uv run ponte retarget <projeto> <animacao> [--in-place]   # refaz a prévia
+uv run ponte close <projeto>             # encerra o personagem: monta o resultado e cria o atalho
+uv run ponte close <projeto> --unreal    # idem, e liga o arquivo para a Unreal 5 (--no-unreal desliga)
+uv run ponte reopen <projeto>            # desfaz o encerramento
+uv run ponte kimodo status|start|stop
+uv run ponte engine [kimodo|cpp|ardy]    # mostra ou troca o gerador em uso
+uv run ponte ardy status|start|stop      # o codificador de texto do ARDY (sobe sozinho para texto novo)
+uv run ponte ardy sessions               # as sessões exportadas pelo demo ao vivo do ARDY
+uv run ponte motion import-ardy <projeto> [sessão]   # traz uma sessão do demo (sem nome: a mais recente)
+uv run ponte fixture                     # recria o boneco de teste
+```
+
+## A tela anterior
+
+A tela de antes de 11/10/2026 continua inteira em <http://127.0.0.1:8765/antiga/>, sem link
+na tela nova. É nela que ficam o laudo, o rig, o roteiro passo a passo, a revisão (aprovar e
+reprovar), o ajuste de pose, os acessórios, o encerramento e a escolha do gerador. As duas
+telas leem o mesmo acervo. As seções seguintes, de
+[Fluxo na tela anterior](#fluxo-na-tela-anterior) até [Unreal 5](#unreal-5), descrevem essa
+tela.
+
+![Tela de uma prévia na tela anterior: o boneco de teste andando, com os botões de validação e as medidas do retarget](docs/img/tela-previa.png)
+
+*Uma prévia na tela anterior: a caminhada de exemplo aplicada no boneco de teste, com os botões
+de validação e as medidas do retarget à direita.*
+
+## Fluxo na tela anterior
 
 1. **Novo projeto** — cada personagem enviado vira um projeto separado: FBX, GLB, BLEND, OBJ
    ou um ZIP com o modelo e as texturas (arraste para a janela). O Blender faz o laudo: tipo
@@ -208,8 +460,9 @@ Detalhes em [Unreal 5](#unreal-5).
 
 ```
 data\projects\<projeto>\
+    CLAUDE.md, AGENTS.md   o guia para a IA do terminal, gravado pela ponte (NOTAS.md, se houver, é escrito à mão)
     personagem\    o arquivo enviado, texturas, rig, acessórios e o laudo
-    animacoes\     o que o Kimodo gerou (BVH no esqueleto SOMA 77)
+    animacoes\     o registro de cada animação e o que o gerador entregou (BVH no esqueleto SOMA 77)
     previas\       cada animação aplicada no personagem (GLB para ver, BLEND para conferir)
     resultado\     só depois de encerrado: <nome>.glb, .fbx e .blend com todas as animações
         unreal5\   com a opção ligada: SK_<nome>.fbx, no esqueleto do Mannequin da Unreal 5
@@ -282,44 +535,6 @@ vê a prévia e só então escreve o próximo, em cima do que foi entregue.
   *Criar versão parada* cria outra prévia assim, para a engine mover o personagem; as duas
   versões entram no resultado, a não ser que você reprove uma.
 
-## Animações do Mixamo
-
-Para as ações que o Mixamo já tem prontas (parado, andar, ataque…), não é preciso gerar: baixe
-a animação de lá em FBX e, no projeto do personagem, na aba *Prévias*, clique **Importar FBX**
-em **Animações Mixamo** (dá para escolher vários de uma vez). Cada arquivo é aplicado no
-personagem do projeto e vira uma ação dele, com o nome do arquivo: aparece em **Ações**, é
-validada como as outras e sai no resultado quando o personagem é encerrado.
-
-A animação passa pelo mesmo retarget das do Kimodo, então serve em qualquer personagem do
-projeto, tenha ele ou não o esqueleto do arquivo, e tanto faz baixar com ou sem a malha
-(*With Skin* / *Without Skin*). Tudo é amostrado a 30 quadros por segundo. Soltar um FBX na
-janela com um projeto aberto pergunta se ele é uma animação do Mixamo ou um personagem novo.
-
-Pela linha de comando: `uv run ponte motion import-fbx <projeto> "Zombie Idle.fbx"`.
-
-## Capturas de movimento (BVH)
-
-Captura de movimento pronta, em BVH de qualquer esqueleto humanoide (XSens, conjuntos abertos
-como a [100STYLE](https://www.ianxmason.com/100style/)), entra pela linha de comando:
-
-```powershell
-uv run ponte motion import-capture <projeto> DragLeftLeg_FW.bvh --label "Andar arrastando a perna" `
-    --start 7.15 --end 168.55 --loop --credit "The 100STYLE Dataset - Ian Mason (CC BY 4.0)"
-```
-
-- `--start` e `--end` recortam a tomada, em segundos do arquivo (quadro ÷ quadros por segundo).
-- `--loop` fica só com o melhor laço do recorte e o fecha: procura o trecho em que o fim mais
-  repete o começo (num andar, uma passada), tira aos poucos o giro que o ator fez nele e
-  reparte pelo trecho a diferença que sobra. `--loop 2.4 3.4` pede outra duração, em segundos
-  (padrão: de 0,6 a 4). Um laço que anda sai reto, na direção de `--direction` (padrão: a mais
-  próxima entre frente, lados e trás).
-- `--credit` guarda o crédito que a licença do arquivo pede; ele aparece na tela da animação.
-
-A captura vira uma ação do personagem, como as do Mixamo, e aparece em **Capturas de
-movimento**, na aba *Prévias*. Na pasta da animação ficam o arquivo como veio (`captura.bvh`)
-e o convertido (`motion.bvh`: nomes do SOMA 77, centímetros, 30 quadros por segundo), que é o
-que o retarget e as medidas (`step_stats.py`) leem. Ainda não há campo na interface para isto.
-
 ## Ajustar a pose
 
 Quando a animação é boa mas um braço ou a mão ficou no lugar errado, no painel da prévia
@@ -332,25 +547,6 @@ Em **Acessórios** (no personagem ou numa prévia), envie o arquivo da arma, esc
 que a carrega (mão direita, costas…) e posicione com *Mover*, *Girar* e *Escala*. O acessório
 pertence ao personagem: acompanha todas as animações dele e sai junto no resultado.
 Prévias feitas antes de mexer na posição avisam que estão desatualizadas.
-
-## Texturas
-
-O personagem aparece texturizado no visualizador, nas prévias e no resultado (GLB, FBX, BLEND).
-
-- **Embutidas no arquivo** (GLB; FBX com mídia embutida; BLEND com recursos empacotados):
-  não precisa fazer nada.
-- **Em arquivos separados**: selecione o modelo **junto com as texturas**, ou arraste a
-  **pasta inteira** para a janela — as subpastas são mantidas. Dá também para acrescentar
-  depois, com *Adicionar texturas* na tela do personagem (ou soltando as imagens com ele aberto).
-- **Modelo que não referencia as texturas**: elas são aplicadas pelo nome do arquivo, que
-  precisa conter o nome do material e o papel — `Corpo_BaseColor.png`, `Corpo_Normal.png`,
-  `Corpo_Roughness.png`, `Corpo_Metallic.png`. Se o modelo tem um material só, basta o papel.
-
-O laudo diz o que foi encontrado, o que faltou e o que foi deduzido. Um ajuste é automático:
-material marcado como transparente cuja textura tem o canal alfa todo opaco volta a ser opaco
-(senão o personagem renderiza "falhado", com faces de trás aparecendo na frente).
-
-Prévias feitas antes de as texturas chegarem não mudam sozinhas: use *Refazer retarget*.
 
 ## Unreal 5
 
@@ -396,50 +592,17 @@ O que saber:
   e a animação com as juntas onde deviam estar. Tudo isso por número, sem interface: falta
   olhar na tela do editor e usar num projeto de jogo.
 
-## Linha de comando
-
-É por onde as animações são feitas pelo backend. Tudo que ela faz aparece na interface, e ela
-funciona mesmo com o servidor fora do ar. Rigar, ajustar a pose e posicionar acessórios são
-só pela interface.
-
-`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`).
-
-```powershell
-uv run ponte serve                       # a interface, em http://127.0.0.1:8765 (rotas da API em /api/docs)
-uv run ponte status                      # projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
-uv run ponte asset add personagem.fbx    # cria o projeto e faz o laudo
-uv run ponte asset add personagem.fbx --textures pasta_das_texturas
-uv run ponte asset textures <projeto> cor.png normal.png   # acrescenta texturas e refaz o laudo
-uv run ponte asset show <projeto>        # laudo e mapeamento de ossos
-# Roteiro, um passo de cada vez: gere, confira a prévia e só então o próximo, com --continue.
-uv run ponte gen "stands still, breathing." --premise "A zombie" --duration 6 --asset <projeto>
-uv run ponte gen "walks forward slowly." --premise "A zombie" --duration 5 --continue <animacao> --asset <projeto>
-# Refazer o último passo: parte da animação anterior e toma o lugar da que saiu errada.
-uv run ponte gen "shuffles forward." --premise "A zombie" --duration 5 --continue <anterior> --replace <errada> --asset <projeto>
-# Passo em laço (termina na pose em que começou); --text-weight para um gesto mais marcado.
-uv run ponte gen "sways from side to side." --premise "A zombie" --duration 6 --loop --text-weight 4 --continue <animacao> --asset <projeto>
-uv run ponte gen "..." --dry-run         # só confere que o roteiro monta; não gera nada
-# Animação pronta: FBX do Mixamo, captura em BVH, ou um BVH do Kimodo que já existe.
-uv run ponte motion import-fbx <projeto> "Zombie Idle.fbx"
-uv run ponte motion import-capture <projeto> captura.bvh --loop
-uv run ponte motion import <projeto> animacao.bvh
-uv run ponte motion list                 # as animações, com o id de cada uma
-uv run ponte motion label <animacao> --name "Reações" --steps "agitado" "vira"   # nome do roteiro e dos passos
-uv run ponte retarget <projeto> <animacao> [--in-place]   # refaz a prévia
-uv run ponte close <projeto>             # encerra o personagem: monta o resultado e cria o atalho
-uv run ponte close <projeto> --unreal    # idem, e liga o arquivo para a Unreal 5 (--no-unreal desliga)
-uv run ponte reopen <projeto>            # desfaz o encerramento
-uv run ponte kimodo status|start|stop
-uv run ponte engine [kimodo|cpp]         # mostra ou troca o gerador em uso
-uv run ponte fixture                     # recria o boneco de teste
-```
-
 ## Geradores de animação
 
 A ponte não traz um gerador: ela chama um que esteja instalado na máquina. O `ponte.toml` do
-repositório vem com os dois desligados. Enquanto nenhum estiver instalado, a ponte mostra
-"Nenhum gerador de animação instalado", não pergunta nada ao abrir e não gera; importar,
-validar e encerrar continuam funcionando.
+repositório é o da máquina do autor: o Kimodo original e o ARDY estão desligados
+(`installed = false`) e o kimodo.cpp aponta para `D:/kimodo.cpp`. Sem os arquivos dele nessa
+pasta, a ponte o dá como não instalado. Enquanto nenhum estiver instalado, a ponte não gera;
+importar, ver, validar e encerrar continuam funcionando.
+
+A tela nova só mostra, na barra de cima, qual gerador está em uso. Quem gera é a IA do
+terminal ou você, pela linha de comando (`uv run ponte gen ...`); a tela de roteiro, com os
+campos de cada passo, é a da tela anterior.
 
 - **Kimodo original**: siga [`docs/kimodo-setup/GUIA-KIMODO.md`](docs/kimodo-setup/GUIA-KIMODO.md)
   (o registro de como ele foi instalado aqui, com os scripts ao lado) e ponha
@@ -447,7 +610,8 @@ validar e encerrar continuam funcionando.
 - **kimodo.cpp**: clonar [kimodo.cpp](https://github.com/localai-org/kimodo.cpp) com o
   submódulo, compilar `kmd-generate` com o CMake do Visual Studio 2022, baixar os pesos com
   `scripts/download_gguf_weights.py --model soma-rp-v1.1` e apontar `[kimodo_cpp] repo` no
-  `ponte.toml`.
+  `ponte.toml`. Com o Vulkan SDK à mão na hora de compilar (basta a cópia simples dele, sem
+  instalar no sistema) o programa gera na placa de vídeo; sem ele, só no processador.
 
 ### Regras fixas do Kimodo
 
@@ -461,45 +625,67 @@ Estão travadas no código (`ponte/config.py` e `ponte/kimodo.py`), não em conf
   da outra, dentro da vez dele.
 
 O Kimodo liga sozinho quando você pede uma animação (na primeira vez do dia o text encoder
-leva uns 5 minutos carregando). Ligado, ele ocupa ~17 GB de RAM: o botão **Desligar** no
-topo da interface libera.
+leva uns 5 minutos carregando). Ligado, ele ocupa ~17 GB de RAM: `uv run ponte kimodo stop`
+libera (na tela anterior, o botão **Desligar**, no topo).
 
 ### Dois geradores: Kimodo original e kimodo.cpp
 
-Com pelo menos um instalado, ao abrir a ponte a primeira tela pergunta **qual gerador você vai
-usar**. Os dois rodam o mesmo modelo, no mesmo esqueleto, e a fila é uma só (um pedido de cada
-vez, somando os dois). Para trocar depois: *trocar gerador*, na barra de cima, ou
-`uv run ponte engine kimodo|cpp`.
+Os dois rodam o mesmo modelo, no mesmo esqueleto, e a fila é uma só (um pedido de cada vez,
+somando os dois). Para ver qual está em uso e trocar: `uv run ponte engine` e
+`uv run ponte engine kimodo|cpp`. A tela anterior pergunta qual usar ao abrir e tem o
+*trocar gerador* na barra de cima.
 
 | | Kimodo original | kimodo.cpp |
 |---|---|---|
 | Onde roda | Docker dentro do WSL | direto no Windows |
-| Laço, caminho e direção, força do gesto | sim | ainda não: a tela desliga esses controles |
+| Laço, caminho e direção, força do gesto | sim | ainda não: a tela anterior desliga esses controles |
 | Continuar um roteiro | parte do fim do clipe gravado | gera o roteiro inteiro de novo, com a mesma semente (o passo anterior sai igual) |
 | Refazer um passo | sai diferente a cada vez | com o mesmo texto sai igual: mude o texto |
 | Memória | o text encoder ocupa uns 17 GB de RAM enquanto ligado | carrega uns 9 GB de pesos a cada geração e solta ao terminar (uso de RAM não medido) |
-| Tempo para 5 s de animação | — | uns 3 min e meio (só processador) |
+| Tempo para 5 s de animação | — | uns 30 s na placa de vídeo (compilado com Vulkan); uns 3 min e meio só no processador |
 
-O kimodo.cpp foi testado compilado sem Vulkan, então gerava no processador. Um clipe gerado
-num não pode ser continuado no outro.
+Compilado com Vulkan, o kimodo.cpp usa a placa de vídeo sozinho (medido numa RTX 3060). Um
+clipe gerado num não pode ser continuado no outro.
 
-### ARDY (em teste)
+### ARDY
 
-O [ARDY](https://github.com/nv-tlabs/ardy) é outro gerador da NVIDIA, em tempo real. Em
-`docs/ardy-setup/` estão os scripts usados para instalá-lo e testá-lo no Ubuntu do WSL:
-instalar, gerar um clipe, abrir o visualizador e o demo ao vivo, parar. **Ele ainda não está
-ligado à ponte**: o que ele gera não vira animação de um projeto.
+O [ARDY](https://github.com/nv-tlabs/ardy) é outro gerador da NVIDIA, irmão do Kimodo, em tempo
+real. Na ponte ele é o terceiro gerador (`ponte engine ardy`, ou a escolha ao abrir a tela
+anterior). Os scripts usados para instalá-lo no Ubuntu do WSL estão em `docs/ardy-setup/`;
+depois, ponha `installed = true` em `[ardy]`, no `ponte.toml`. Na máquina do autor ele esteve
+instalado de 08 a 10/10/2026 e foi desinstalado; o que deu certo e o que deu errado com ele
+está em [`docs/ardy-setup/ACERTOS-E-ERROS.md`](docs/ardy-setup/ACERTOS-E-ERROS.md).
+
+- **Roteiro, como nos outros**: um passo de cada vez, cada um continuando o clipe entregue, com
+  laço, direção e ritmo, caminho desenhado e força do gesto. Quem fala com o ARDY é
+  `ardy_scripts/gerar.py`, que roda no ambiente dele, dentro do Ubuntu.
+- **Esqueleto próprio**: o Core, de 27 juntas, a 20 quadros por segundo. O clipe chega à ponte
+  já a 30 e entra pelo caminho das capturas (os ossos ganham o nome da junta do SOMA de mesmo
+  papel), então o retarget, as medidas e o encerramento funcionam igual.
+- **Rápido**: uns 40 s por pedido numa RTX 3060, quase tudo carregando o modelo.
+- **O codificador de texto ocupa uns 16 GB de RAM**, mas só texto novo precisa dele: cada texto
+  é codificado uma vez e fica guardado (na mesma pasta em que o demo do ARDY guarda os dele).
+  Para um texto novo a ponte sobe o codificador (3 a 5 minutos), codifica e o desliga antes de
+  gerar. Se ele já estava no ar (o demo ao vivo aberto, ou ligado pelo botão **Ligar** da barra
+  de cima, ou `ponte ardy start`), fica como estava. Com a Unreal aberta, ou menos de 14 GB
+  livres, a ponte recusa e diz por quê, em vez de travar o computador.
+- **Sessões do demo ao vivo**: o que você grava no demo do ARDY (aba IO, *Export Session*) entra
+  no projeto em **Sessões do ARDY**, na aba *Prévias* (ou `ponte motion import-ardy <projeto>`).
+  Vira um roteiro, com um passo por texto usado no demo, e dá para continuar dele.
+- **Escreva o que o corpo faz.** `A person is walking.` depois de um passo parado não andou
+  (0,6 m em 5 s); `A young lady walks forward elegantly.` andou 5,3 m em 6 s.
 
 ## Como é por dentro
 
-São três ambientes de Python que não se importam entre si. Conversam por argumentos e
+São quatro ambientes de Python que não se importam entre si. Conversam por argumentos e
 arquivos JSON:
 
 | Onde roda | Código | O que faz |
 |---|---|---|
-| venv do `uv`, no Windows | `ponte/` | o backend: guarda os registros, organiza a fila, chama o Blender e o gerador, serve a API e a linha de comando |
+| venv do `uv`, no Windows | `ponte/` | o backend: guarda os registros, organiza a fila, chama o Blender e o gerador, abre os terminais, serve a API e a linha de comando |
 | Python embutido do Blender | `blender/` | laudo, rig, retarget, acessórios, montagem do resultado, arquivo da Unreal 5 |
 | container do Kimodo, no WSL | `kimodo_scripts/gerar.py` | o roteiro: passos encadeados, transições, trajetória, laço |
+| ambiente do ARDY, no Ubuntu do WSL | `ardy_scripts/gerar.py` | o mesmo roteiro, no ARDY, e a leitura das sessões do demo ao vivo dele |
 
 - **Camadas do backend**: `store` (registros em arquivo) → `pipeline` (as operações: laudo,
   rig, gerar, retarget, encerrar) → `server` (FastAPI) e `cli`. A interface e a linha de
@@ -512,7 +698,14 @@ arquivos JSON:
   `blender/ponte_bl/`.
 - **Interface sem build**: `web/app.js` (as telas) e `web/viewer.js` (o visualizador, em
   three.js), sem framework. A cada 2 s ela busca o estado inteiro em `GET /api/state` e
-  redesenha.
+  redesenha. A tela anterior é uma cópia completa em `web/antiga/`, servida em `/antiga/`.
+- **Terminal** (`ponte/terminal.py`): um PowerShell por projeto, num pseudoconsole do Windows
+  (ConPTY, pelo `pywinpty`), ligado à página por WebSocket e desenhado pelo xterm.js. O
+  servidor guarda o que o terminal escreveu, para reaparecer quando a página volta, e fecha os
+  que ninguém usa. A rota confere a origem do pedido e a senha da vez antes de aceitar.
+- **Animação pronta** (`pipeline.add_ready_animation`): o GLB é copiado para a pasta da prévia
+  e ganha os dois registros (`motion.json` e `result.json`, com o mesmo id). A duração e os
+  quadros são lidos do próprio GLB.
 - **Nomes**: o código e a API estão em inglês (`asset`, `motion`, `result`, `final`); a
   interface e as pastas, em português (personagem, animação, prévia, resultado).
 - **Para testar sem tocar no seu acervo**, aponte a variável `PONTE_DATA` para outra pasta.
@@ -551,17 +744,22 @@ uv run python tests/check_fila.py        # Kimodo: um pedido de cada vez, na ord
 uv run python tests/check_mixamo.py      # animação em FBX: mesmo movimento do caminho direto, vira ação e sai no resultado
 uv run python tests/check_capture.py     # captura em BVH de outro esqueleto: mesmo movimento, laço fechado, vira ação e sai no resultado
 uv run python tests/check_engine.py      # os dois geradores: kimodo.cpp sai no SOMA 77, continua refazendo o roteiro, divide a fila com o original
+uv run python tests/check_ardy.py        # ARDY: o clipe entra convertido, o codificador só sobe para texto novo, continua do clipe gravado
+uv run python tests/check_meshy.py       # Meshy: primeiro a imagem, o modelo só depois de aprovada, e o modelo vira projeto
 uv run python tests/check_close.py       # encerrar: resultado único igual às prévias, atalho fora do projeto
 uv run python tests/check_unreal.py      # Unreal 5: esqueleto do Mannequin, mesmas animações (--engine <UnrealEditor-Cmd.exe> importa de verdade)
 uv run python tests/check_migration.py   # acervo de versões antigas vai para as pastas de projeto
 uv run python tests/check_autorig.py <arquivo_do_mixamo.fbx>   # rigador × rig do próprio Mixamo
+uv run python tests/check_terminal.py    # terminal da tela: abre parado na pasta, recusa quem vem de fora, fecha sozinho (uns 2 min)
 ```
 
 | Teste | Precisa de |
 |---|---|
 | `check_rigmap.py`, `check_migration.py`, `check_fila.py` | só Python |
+| `check_terminal.py` | só Python, no Windows (sobe um servidor próprio na porta 8767) |
 | `check_retarget.py`, `check_textures.py`, `check_mixamo.py`, `check_capture.py`, `check_close.py` | Blender |
-| `check_chain.py`, `check_engine.py` | Blender (o gerador é trocado por um dublê) |
+| `check_chain.py`, `check_engine.py`, `check_ardy.py` | Blender (o gerador é trocado por um dublê) |
+| `check_meshy.py` | Blender (a rede é trocada por um dublê: não fala com o Meshy nem gasta créditos) |
 | `check_bake.py` | Blender, Node e `web/node_modules` |
 | `check_unreal.py` | Blender; com `--engine`, a Unreal 5 |
 | `check_autorig.py` | Blender e um FBX rigado pelo Mixamo |
@@ -571,6 +769,34 @@ A interface não tem teste automático. `node tests/ui_click.mjs <url> <pasta> <
 a página no Edge e clica de verdade, para conferir um botão novo.
 
 ## Limites conhecidos
+
+Da tela nova (11/10/2026):
+
+- É a primeira versão: não tem laudo, rig, roteiro, revisão, ajuste de pose, acessórios nem
+  encerramento. Isso tudo está na [tela anterior](#a-tela-anterior) e na linha de comando.
+- O cartão de cada projeto mostra só a inicial do nome, sem imagem do personagem.
+- O terminal só existe no Windows. Foi provado pelo teste (`tests/check_terminal.py`: abre
+  parado na pasta, recusa pedido de outro site e senha errada, fecha sozinho, espera quando há
+  algo escrito, reinicia, deixa apagar o projeto). O Claude Code abre nele e mostra o prompt;
+  uma conversa inteira pelo terminal da tela ainda não foi feita, e outras IAs não foram
+  testadas.
+- O guia da pasta sai como `CLAUDE.md` e `AGENTS.md`. IA que procura outro nome de arquivo não
+  o acha sozinha: peça a ela que leia um dos dois.
+- Uma animação posta com `ponte anim add` é mostrada como veio, sem conferência. O encerramento
+  (`ponte close`) monta o resultado a partir do `.blend` de cada prévia do retarget: pelo
+  código, com uma animação pronta sem `--blend` no projeto ele recusa, pedindo o `.blend`
+  (não foi rodado), e com `--blend` não foi testado. Para projeto feito assim, o que vai para o
+  jogo é o GLB de cada animação (`previas/<id>/result.glb`).
+- Cada animação pronta leva o personagem inteiro, com a textura. Num personagem com textura
+  grande isso deu 40 MB por animação e uns 4 segundos para abrir no visor.
+- O botão do Mixamo foi provado com clique de verdade, num acervo descartável, com um FBX
+  baixado do Mixamo: entrou na lista em 8 segundos, abriu sozinho e tocou, e o × o apagou.
+- A tela foi conferida num Edge sem janela, com cliques de verdade e leitura do relógio do
+  visor. Arrastar a divisória, soltar arquivos na janela e renomear não foram testados assim.
+- Só a rota do terminal confere de onde vem o pedido; as outras, não. O servidor escuta
+  apenas em `127.0.0.1`: não o exponha na rede.
+
+Do resto:
 
 - Validado com o boneco de teste e com um personagem real (gerado no Tripo, esqueleto com
   nomes do Mixamo). Outras convenções de ossos só foram testadas pelos nomes, não com modelos.
@@ -631,6 +857,20 @@ a página no Edge e clica de verdade, para conferir um botão novo.
 - O esqueleto do rigador tem os nomes e a hierarquia do Mixamo; a orientação interna de cada
   osso não foi igualada à do Mixamo. As animações geradas aqui funcionam (o retarget não
   depende disso). Aplicar nele uma animação baixada do site do Mixamo não foi testado.
+- ARDY: conferido em 09/10/2026 com gerações de verdade numa RTX 3060, por número: a emenda
+  entre passos sai sem tranco, o que já foi entregue não muda ao continuar, um andar em laço
+  de 4 s fecha em 0,0 cm (a 30 quadros por segundo) e a direção e o ritmo pedidos saem (0,8 m/s
+  pedidos, 0,80 andados). Tudo com textos que já estavam codificados: **subir o codificador
+  pela ponte, codificar um texto novo e desligá-lo ainda não foi rodado de verdade** (só com
+  dublê). A leitura de sessões foi testada com um arquivo fabricado no formato que o código do
+  demo grava, não com uma sessão exportada por ele. Num caminho desenhado a ponte manda o corpo
+  acompanhar o caminho; isso foi medido só pela chegada (a menos de 0,1 m do último ponto), sem olhar na
+  tela. Não testado: variações lado a lado, passo de 10 s, e a qualidade do movimento, que só
+  quem assiste julga.
+- Meshy: o fluxo foi conferido com a rede trocada por um dublê que responde como a
+  documentação da API descreve (lida em 09/10/2026) e, na tela, com cliques de verdade.
+  **Nenhum pedido foi feito ao Meshy de verdade**: falta a primeira imagem e o primeiro modelo
+  com uma chave. Não testado: o tempo e o custo reais, a qualidade da imagem e do modelo.
 - Rigs de controle (Rigify) são detectados e recusados.
 - Mapeamento manual de ossos existe só pela API (`PUT /api/assets/<id>/mapping`), sem tela.
 
@@ -638,12 +878,14 @@ a página no Edge e clica de verdade, para conferir um botão novo.
 
 | Pasta | Conteúdo |
 |---|---|
-| `ponte/` | backend: armazenamento, fila, runners do Blender e do Kimodo, API, CLI |
+| `ponte/` | backend: armazenamento, fila, runners do Blender e dos geradores, terminal da tela, Meshy, API, CLI |
 | `blender/` | scripts que rodam dentro do Blender (laudo, rig, retarget, acessórios, tira de quadros, boneco de teste) |
 | `kimodo_scripts/` | o gerador que roda dentro do container do Kimodo (roteiro, transições, trajetória) |
-| `web/` | interface (three.js, sem build) |
+| `ardy_scripts/` | o gerador que roda no ambiente do ARDY, no Ubuntu (roteiro, laço, trajetória, sessões do demo) |
+| `web/` | interface (three.js e xterm.js, sem build); `web/antiga/` é a tela anterior |
 | `scripts/` | atalho de desktop, abrir e parar |
-| `docs/` | guia e scripts de instalação do Kimodo (`kimodo-setup/`), scripts do ARDY (`ardy-setup/`) e a imagem deste README (`img/`) |
+| `docs/` | guia e scripts de instalação do Kimodo (`kimodo-setup/`), scripts e registro do ARDY (`ardy-setup/`) e as imagens deste README (`img/`) |
 | `tests/` | verificações e os BVHs de referência |
-| `data/` | o acervo local, fora do git: `projects/` (um projeto por personagem), `resultados/` (atalhos dos encerrados), `jobs/` |
+| `data/` | o acervo local, fora do git: `projects/` (um projeto por personagem, com o guia para a IA do terminal), `resultados/` (atalhos dos encerrados), `jobs/` |
+| `CLAUDE.md` | o guia de trabalho para a IA que mexe neste repositório: regras do dono, histórico e o que já deu certo e errado |
 | `ponte.toml` | configuração da máquina: caminho do Blender, geradores, porta do servidor |

@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import engines, jobs, kimodo, pipeline, store
+from . import ardy, engines, jobs, kimodo, meshy, pipeline, store
 from .config import DATA, KIMODO_MAX_SAMPLES, KIMODO_MODEL, SETTINGS
 
 
@@ -47,11 +47,18 @@ def cmd_serve(args) -> None:
 def cmd_status(_args) -> None:
     k = kimodo.status()
     print(f"Kimodo  : {KIMODO_MODEL} · docker {'ok' if k['docker'] else 'parado'} · text encoder {'ok' if k['encoder'] else 'parado'} · gerando {k['generating']}/{k['limit']} · {k['queued']} na fila")
-    # Os dois geradores rodam o mesmo modelo; o usuário escolhe um ao abrir a ponte.
+    a = ardy.status()
+    if a["installed"]:
+        print(f"ARDY    : {a['model']} · codificador de texto {'no ar' if a['encoder'] else 'desligado'}")
+    # O usuário escolhe o gerador ao abrir a ponte.
     print("Gerador : " + " · ".join(f"{o['name']}{' (em uso)' if o['id'] == engines.current() else ''}{' [indisponível]' if o['problem'] else ''}" for o in engines.status()["options"]))
     assets, motions, results = store.list_all("asset"), store.list_all("motion"), store.list_all("result")
     closed = [a for a in assets if a.get("final")]
     print(f"Acervo  : {len(assets)} projeto(s) · {len(motions)} animação(ões) · {len(results)} prévia(s) · {len(closed)} personagem(ns) encerrado(s)")
+    # Pedidos ao Meshy que ainda não viraram projeto: a imagem espera a aprovação dele, e a nota de uma reprovada diz o que mudar.
+    for r in meshy.list_requests():
+        if r["status"] != meshy.READY:
+            print(f"Meshy   : {r['name']} ({r['id']}) · {r['status']}" + (f' "{r["note"]}"' if r.get("note") else "") + (f" · erro: {r['error']}" if r.get("error") else ""))
     active = [j for j in jobs.list_jobs() if j["status"] in jobs.ACTIVE]
     for job in active:
         print(f"Rodando : {job['title']} — {job['progress']}")
@@ -195,6 +202,12 @@ def cmd_retarget(args) -> None:
     print(out["result_ids"][0])
 
 
+def cmd_anim_add(args) -> None:
+    """Uma animação feita no Blender, já no personagem, entra na tela do projeto como está."""
+    result = pipeline.add_ready_animation(args.asset, args.file, args.name, blend=args.blend, replace=args.replace, log=lambda line: print(f"  · {line}", flush=True))
+    print(result["id"])
+
+
 def _free_project(asset_id: str) -> dict:
     asset = store.get("asset", asset_id)
     busy = pipeline.active_jobs(asset_id)
@@ -238,6 +251,86 @@ def cmd_kimodo(args) -> None:
     elif args.action == "stop":
         print(kimodo.stop())
     print(kimodo.status())
+
+
+def cmd_ardy(args) -> None:
+    """O ARDY: o codificador de texto dele e as sessões exportadas pelo demo ao vivo."""
+    if args.action == "start":
+        ardy.start_encoder(lambda line: print(f"  · {line}", flush=True))
+    elif args.action == "stop":
+        print(ardy.stop())
+    elif args.action == "sessions":
+        found = ardy.sessions()
+        print(f"Sessões do demo ao vivo em {found['folder']} (no Ubuntu):")
+        for s in found["sessions"]:
+            if s.get("error"):
+                print(f"  {s['file']:<40} ilegível: {s['error']}")
+            else:
+                print(f"  {s['file']:<40} {s['seconds']:>6g} s  {s['modified'][:16].replace('T', ' ')}  {' → '.join(s['prompts']) or '(sem texto)'}")
+        if not found["sessions"]:
+            print("  (nenhuma: no demo, aba IO, botão Export Session)")
+        return
+    s = ardy.status()
+    print(f"ARDY    : {'instalado' if s['installed'] else 'não instalado'} · {s['model']} · codificador de texto {'no ar' if s['encoder'] else 'desligado (sobe sozinho para texto novo)'}")
+
+
+def cmd_motion_import_ardy(args) -> None:
+    session = args.session
+    if not session:
+        found = [s for s in ardy.sessions()["sessions"] if not s.get("error")]
+        if not found:
+            raise ValueError("Não há sessão exportada pelo demo do ARDY (no demo: aba IO, botão Export Session).")
+        session = found[0]["file"]  # a mais recente
+        print(f"  · sessão mais recente: {session}")
+    out = _run_job(
+        "retarget",
+        f"Importar do ARDY: {args.label or Path(session).stem} → {args.asset}",
+        {"asset_id": args.asset},
+        lambda log: {"result_ids": [pipeline.import_ardy_session(args.asset, session, args.label, start=args.start, end=args.end, log=log)["id"]]},
+    )
+    print(out["result_ids"][0])
+
+
+def cmd_meshy(args) -> None:
+    """Personagem pelo Meshy, em duas etapas: a imagem, que o usuário aprova, e só então o modelo 3D."""
+
+    def need(what: str) -> str:
+        if not args.value:
+            raise ValueError(f"Diga {what}.")
+        return args.value
+
+    if args.action == "key":
+        meshy.save_key(need("a chave da API do Meshy"))
+        left = meshy.balance()
+        print(f"chave guardada em {meshy.KEY_FILE} (fora do git)" + (f" · {left} créditos na conta" if left is not None else " · o Meshy não confirmou a chave: confira"))
+    elif args.action == "image":
+        prompt = need("o que a imagem deve mostrar, em inglês")
+        out = _run_job(
+            "meshy",
+            f"Meshy: imagem de {args.name or prompt[:40]}",
+            {},
+            lambda log: {"meshy_request": meshy.request_image(prompt, args.name, pose=args.pose, ai_model=args.model, replaces=args.replaces, log=log)["id"]},
+        )
+        record = meshy.get(out["meshy_request"])
+        print(f"pedido {record['id']}: imagem em {meshy.REQUESTS / record['id'] / record['image']}")
+        print("aguardando a aprovação do usuário: Pedidos ao Meshy, na tela de entrada da ponte")
+    elif args.action == "approve":
+        record = meshy.get(need("o id do pedido"))
+        if record["status"] == meshy.BUILDING and any(j["status"] in jobs.ACTIVE and (j.get("params") or {}).get("meshy_request") == record["id"] for j in jobs.list_jobs()):
+            raise ValueError("O modelo 3D deste pedido já está sendo gerado.")
+        out = _run_job("meshy", f"Meshy: modelo 3D de {record['name']}", {"meshy_request": record["id"]}, lambda log: {"asset_id": pipeline.approve_meshy(record["id"], polycount=args.polycount, log=log)["id"]})
+        print(f"projeto criado: {out['asset_id']}")
+    elif args.action == "reject":
+        record = meshy.reject(need("o id do pedido"), args.note or "")
+        print(f"reprovado: {record['id']}" + (f' "{record["note"]}"' if record["note"] else ""))
+    elif args.action == "delete":
+        meshy.delete(meshy.get(need("o id do pedido"))["id"])
+        print(f"tirado da lista: {args.value}")
+    else:
+        left = meshy.balance() if meshy.api_key() else None
+        print("Meshy   : " + ("sem chave (crie em https://www.meshy.ai/developers/keys e guarde com `ponte meshy key <chave>`)" if not meshy.api_key() else f"chave ok · {left if left is not None else '?'} créditos"))
+        for r in meshy.list_requests():
+            print(f"  {r['id']:<40} {r['status']:<22} {r['name']}" + (f' · nota: "{r["note"]}"' if r.get("note") else "") + (f" · erro: {r['error']}" if r.get("error") else "") + (f" · projeto {r['asset_id']}" if r.get("asset_id") else ""))
 
 
 def cmd_engine(args) -> None:
@@ -293,7 +386,7 @@ def main() -> None:
     p.add_argument("prompt", help="em inglês; cada frase terminada em ponto é um passo do roteiro, que continua o anterior")
     p.add_argument("--premise", default="", help="contexto repetido em todo passo (ex.: \"A soldier aiming a rifle\")")
     p.add_argument("--dry-run", action="store_true", help="só confere que o roteiro monta; não gera nada")
-    p.add_argument("--engine", choices=sorted(engines.ENGINES), help="o gerador: o Kimodo original (kimodo) ou o kimodo.cpp (cpp). Padrão: o que o usuário escolheu ao abrir a ponte (ver `ponte engine`)")
+    p.add_argument("--engine", choices=sorted(engines.ENGINES), help="o gerador: o Kimodo original (kimodo), o kimodo.cpp (cpp) ou o ARDY (ardy). Padrão: o que o usuário escolheu ao abrir a ponte (ver `ponte engine`)")
     p.add_argument("--duration", type=float, nargs="+", default=[5.0], help="segundos; um valor, ou um por passo")
     p.add_argument("--seed", type=int)
     p.add_argument("--samples", type=int, default=1, choices=range(1, KIMODO_MAX_SAMPLES + 1))
@@ -331,6 +424,13 @@ def main() -> None:
     p.add_argument("--direction", choices=sorted(pipeline.DIRECTIONS), help="para onde anda um laço que se desloca (padrão: a mais próxima entre frente, lados e trás)")
     p.add_argument("--credit", help="crédito que a licença do arquivo pede; fica no registro da animação")
     p.set_defaults(fn=cmd_motion_import_capture)
+    p = motion.add_parser("import-ardy", help="traz uma sessão exportada pelo demo ao vivo do ARDY e a aplica no personagem do projeto")
+    p.add_argument("asset", help="id do projeto (o do personagem)")
+    p.add_argument("session", nargs="?", help="arquivo da sessão (ver `ponte ardy sessions`); sem ele, a mais recente")
+    p.add_argument("--label", help="nome do roteiro (padrão: o nome do arquivo)")
+    p.add_argument("--start", type=float, metavar="S", help="segundo da sessão em que o trecho começa")
+    p.add_argument("--end", type=float, metavar="S", help="segundo da sessão em que o trecho termina")
+    p.set_defaults(fn=cmd_motion_import_ardy)
     p = motion.add_parser("label", help="dá nome ao roteiro e aos passos dele, para achar cada trecho na interface")
     p.add_argument("id")
     p.add_argument("--name", help="nome do roteiro")
@@ -339,6 +439,15 @@ def main() -> None:
     p = motion.add_parser("list")
     p.add_argument("--asset", help="só as animações deste projeto")
     p.set_defaults(fn=cmd_motion_list)
+
+    anim = sub.add_parser("anim", help="animações prontas, feitas no Blender: entram na tela do projeto como estão").add_subparsers(dest="sub", required=True)
+    p = anim.add_parser("add", help="põe na tela do projeto um GLB com o personagem já animado (sem retarget)")
+    p.add_argument("asset", help="id do projeto (o do personagem)")
+    p.add_argument("file", type=Path, help="o .glb, com o personagem, os acessórios e a animação")
+    p.add_argument("--name", help="nome da animação na tela (padrão: o nome do arquivo)")
+    p.add_argument("--blend", type=Path, help="o arquivo do Blender de onde ela saiu, para ficar guardado junto")
+    p.add_argument("--replace", action="store_true", help="troca a animação pronta de mesmo nome que já estiver no projeto")
+    p.set_defaults(fn=cmd_anim_add)
 
     p = sub.add_parser("retarget", help="aplica uma animação do projeto no personagem dele (a prévia que o humano valida)")
     p.add_argument("asset")
@@ -363,7 +472,22 @@ def main() -> None:
     p.add_argument("action", choices=("status", "start", "stop"))
     p.set_defaults(fn=cmd_kimodo)
 
-    p = sub.add_parser("engine", help="mostra ou troca o gerador em uso: o Kimodo original (kimodo) ou o kimodo.cpp (cpp)")
+    p = sub.add_parser("meshy", help="personagem pelo Meshy em duas etapas: a imagem (image), que o usuário aprova na tela, e só então o modelo 3D (approve), que vira projeto")
+    p.add_argument("action", choices=("status", "key", "image", "approve", "reject", "delete"))
+    p.add_argument("value", nargs="?", help="image: o texto do pedido, em inglês; approve, reject, delete: o id do pedido; key: a chave da API")
+    p.add_argument("--name", help="com image: o nome do personagem (vira o nome do projeto)")
+    p.add_argument("--pose", choices=meshy.POSES, default="a-pose", help="com image: a pose, com os braços afastados do corpo, para o rig (padrão: a-pose)")
+    p.add_argument("--model", choices=meshy.IMAGE_MODELS, default=meshy.IMAGE_MODEL, help="com image: o modelo de imagem (padrão: o mais barato)")
+    p.add_argument("--replace", dest="replaces", metavar="PEDIDO", help="com image: o pedido reprovado que este refaz; ele sai da lista quando a imagem nova chega")
+    p.add_argument("--note", help="com reject: o que mudar")
+    p.add_argument("--polycount", type=int, default=meshy.POLYCOUNT, metavar="N", help=f"com approve: triângulos do modelo (padrão {meshy.POLYCOUNT}; 0 deixa como o Meshy gerar)")
+    p.set_defaults(fn=cmd_meshy)
+
+    p = sub.add_parser("ardy", help="o ARDY: consulta, liga ou desliga o codificador de texto dele, ou lista as sessões do demo ao vivo")
+    p.add_argument("action", choices=("status", "start", "stop", "sessions"))
+    p.set_defaults(fn=cmd_ardy)
+
+    p = sub.add_parser("engine", help="mostra ou troca o gerador em uso: o Kimodo original (kimodo), o kimodo.cpp (cpp) ou o ARDY (ardy)")
     p.add_argument("name", nargs="?", choices=sorted(engines.ENGINES))
     p.set_defaults(fn=cmd_engine)
 
@@ -374,7 +498,7 @@ def main() -> None:
     args = ap.parse_args()
     try:
         args.fn(args)
-    except (KeyError, ValueError, kimodo.KimodoError) as exc:
+    except (KeyError, ValueError, kimodo.KimodoError, meshy.MeshyError) as exc:
         print(f"ERRO: {exc.args[0] if exc.args else exc}", file=sys.stderr)
         sys.exit(1)
 

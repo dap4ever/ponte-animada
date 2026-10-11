@@ -91,7 +91,7 @@ def main() -> int:
         engines.problem = lambda engine: "Não está instalado neste PC." if engine == "kimodo" else None
         expect(refused(lambda: engines.choose("kimodo")), "deixou escolher um gerador que não está instalado")
         expect(refused(lambda: pipeline.resolve_engine("kimodo", None)), "aceitou um pedido para um gerador que não está instalado")
-        expect([bool(o["problem"]) for o in engines.status()["options"]] == [True, False], "a interface não fica sabendo qual gerador está desinstalado")
+        expect([bool(o["problem"]) for o in engines.status()["options"]] == [True, False, False], "a interface não fica sabendo qual gerador está desinstalado")
         # Daqui em diante o teste não depende do que está instalado nesta máquina.
         engines.problem = lambda _engine: None
         # 1) A saída crua vira o SOMA 77: assinatura, quadril em centímetros, rotação e dedos.
@@ -135,7 +135,7 @@ def main() -> int:
         expect(refused(lambda: engines.choose("outro")), "aceitou um gerador que não existe")
         engines.choose("cpp")
         expect(engines.current() == "cpp" and engines.status()["current"] == "cpp", "a escolha do kimodo.cpp não ficou gravada")
-        expect([o["id"] for o in engines.status()["options"]] == ["kimodo", "cpp"] and "loop" in engines.status()["options"][1]["lacks"], "a interface não recebe os dois geradores com o que falta em cada um")
+        expect([o["id"] for o in engines.status()["options"]] == ["kimodo", "cpp", "ardy"] and "loop" in engines.status()["options"][1]["lacks"], "a interface não recebe os geradores com o que falta em cada um")
 
         # 4) Pela ponte: passo 1 e, continuando, o passo 2 (o roteiro inteiro de novo, mesma semente).
         rig = work / "boneco.fbx"

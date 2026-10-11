@@ -5,7 +5,9 @@ description = "Ponte entre Blender, Kimodo e a validação humana de assets e an
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
+    "pywinpty>=3.0.5",
     "uvicorn>=0.30",
+    "websockets>=17.2",
 ]
 
 [project.scripts]
