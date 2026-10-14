@@ -14,6 +14,10 @@ uma animação aplicada no personagem, para validar. Animações e prévias guar
 ``asset_id`` de que projeto são. O resultado é um só por personagem e fica descrito no
 registro dele, em ``final``.
 
+Um projeto diz em ``game`` de que jogo é e, em ``role``, se é personagem ou modelo 3D (um
+asset do jogo). Os jogos, com as texturas e os sons de cada um, ficam em ``data/games/``
+(``ponte/games.py``).
+
 O servidor e a CLI leem e escrevem aqui, então o que um faz o outro enxerga.
 """
 

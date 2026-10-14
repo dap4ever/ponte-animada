@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulador · PonteAnimada</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* O simulador: o personagem andando pelo chão à esquerda, os ajustes à direita. */
+    .sim { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(320px, 1fr) 340px; }
+    .sim-stage { position: relative; min-width: 0; min-height: 0; background: var(--view); }
+    .sim-stage canvas { display: block; width: 100%; height: 100%; outline: none; }
+    .sim-hud {
+      position: absolute; left: 12px; top: 10px; display: flex; flex-direction: column; gap: 4px;
+      padding: 8px 11px; border-radius: 7px; background: rgba(18, 20, 24, 0.78); border: 1px solid var(--line);
+      font-size: 12.5px; pointer-events: none; min-width: 190px;
+    }
+    .sim-hud .state { font-size: 15px; font-weight: 600; }
+    .sim-hud .muted { color: var(--muted); }
+    .sim-hud .warn { color: var(--warn); }
+    .sim-hud .ok { color: var(--ok); }
+    .sim-keys {
+      position: absolute; left: 12px; bottom: 10px; padding: 7px 11px; border-radius: 7px; max-width: min(640px, calc(100% - 24px));
+      background: rgba(18, 20, 24, 0.78); border: 1px solid var(--line); color: var(--muted); font-size: 12px; pointer-events: none;
+    }
+    .sim-keys kbd {
+      display: inline-block; min-width: 18px; padding: 0 5px; margin: 0 1px; border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel-2); color: var(--text); font: 11.5px/1.55 "Cascadia Mono", Consolas, monospace; text-align: center;
+    }
+    .sim-loading {
+      position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px;
+      color: var(--muted); font-size: 14px; background: var(--view);
+    }
+    .sim-side { min-height: 0; overflow: hidden auto; background: var(--panel); border-left: 1px solid var(--line); }
+    .sim-side section { padding: 12px 14px 14px; border-bottom: 1px solid var(--line); }
+    .sim-side h2 { margin: 0 0 9px; font-size: 11.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .sim-row { display: grid; grid-template-columns: 92px 1fr; align-items: center; gap: 6px 10px; margin-top: 8px; }
+    .sim-row label { color: var(--muted); font-size: 12.5px; }
+    .sim-row select, .sim-row input[type="number"] {
+      width: 100%; padding: 5px 7px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px;
+    }
+    .sim-row .note { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -2px; }
+    .sim-row .with-unit { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .sim-row .with-unit input { flex: 1; min-width: 70px; }
+    .sim-row .with-unit span { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .sim-side .toggle { margin-top: 10px; white-space: normal; align-items: flex-start; }
+    .sim-side .toggle input { margin-top: 3px; }
+    .sim-side .hint { margin-top: 8px; }
+    .sim-actions { display: flex; flex-direction: column; gap: 5px; }
+    .sim-actions button { display: flex; align-items: center; gap: 9px; text-align: left; }
+    .sim-actions kbd {
+      min-width: 20px; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg);
+      font: 11.5px/1.55 "Cascadia Mono", Consolas, monospace; text-align: center; color: var(--muted);
+    }
+    .sim-buttons { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
+    a.btn { text-decoration: none; display: inline-block; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="icon.svg" alt="" width="22" height="22">
+      <span>PonteAnimada</span>
+    </div>
+    <div class="crumb">
+      <a class="btn small" id="back" href="/" title="Voltar à tela do projeto">← Projeto</a>
+      <span class="project-name" id="project-name" style="cursor: default"></span>
+      <span class="project-facts" id="project-facts"></span>
+    </div>
+    <div class="status">Simulador: as animações como num jogo</div>
+  </header>
+
+  <main class="sim">
+    <section class="sim-stage" id="stage">
+      <div class="sim-hud" id="hud" hidden>
+        <span class="state" id="hud-state">Parado</span>
+        <span id="hud-speed" class="muted"></span>
+        <span id="hud-slide" class="muted"></span>
+      </div>
+      <div class="sim-keys" id="keys" hidden>
+        <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou as setas andam · <kbd>Shift</kbd> corre · clique no chão: vai até lá · dois cliques: corre até lá ·
+        arraste o mouse: gira a câmera · rodinha: aproxima · <kbd>Q</kbd> patrulha / alerta · <kbd>C</kbd> troca a câmera · <kbd>R</kbd> volta ao centro      </div>
+      <div class="sim-loading" id="loading">Abrindo o simulador…</div>
+    </section>
+
+    <aside class="sim-side" id="side" hidden>
+      <section>
+        <h2>Qual animação toca em cada momento</h2>
+        <div class="sim-row">
+          <label for="set" title="Patrulha: fuzil baixo. Alerta: fuzil no ombro, pronto para atirar (as animações com _aiming).">Conjunto</label>
+          <select id="set"><option value="patrulha">patrulha (fuzil baixo)</option><option value="alerta">alerta (mirando)</option></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-idle">Parado</label>
+          <select id="clip-idle"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-walk">Andando</label>
+          <select id="clip-walk"></select>
+          <span class="note" id="note-walk"></span>
+        </div>
+        <div class="sim-row">
+          <label for="clip-run">Correndo</label>
+          <select id="clip-run"></select>
+          <span class="note" id="note-run"></span>
+        </div>
+        <div class="sim-row">
+          <label for="clip-start" title="Toca quando ele sai do parado para andar para a frente; termina no primeiro quadro do andar.">Começar a andar</label>
+          <select id="clip-start"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-stop" title="Toca quando ele para de andar; termina no primeiro quadro do parado.">Parar de andar</label>
+          <select id="clip-stop"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnWalk" title="Toca quando você manda o personagem para o lado contrário enquanto ele anda.">Meia-volta andando</label>
+          <select id="clip-turnWalk"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnIdle" title="Toca quando você manda o personagem para o lado contrário enquanto ele está parado.">Meia-volta parado</label>
+          <select id="clip-turnIdle"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnAroundRun" title="Correndo e mandado para o lado contrário: a meia-volta em trote.">Meia-volta correndo</label>
+          <select id="clip-turnAroundRun"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnLeftRun" title="Correndo e mandado para a esquerda: a virada em trote.">Virar à esquerda correndo</label>
+          <select id="clip-turnLeftRun"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnRightRun" title="Correndo e mandado para a direita: a virada em trote.">Virar à direita correndo</label>
+          <select id="clip-turnRightRun"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnLeft" title="Toca quando você manda o personagem para a esquerda dele (entre 60° e 135°) enquanto ele anda.">Virar à esquerda andando</label>
+          <select id="clip-turnLeft"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnRight" title="Toca quando você manda o personagem para a direita dele (entre 60° e 135°) enquanto ele anda.">Virar à direita andando</label>
+          <select id="clip-turnRight"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnLeftIdle" title="Toca quando você manda o personagem para a esquerda dele enquanto ele está parado.">Virar à esquerda parado</label>
+          <select id="clip-turnLeftIdle"></select>
+        </div>
+        <div class="sim-row">
+          <label for="clip-turnRightIdle" title="Toca quando você manda o personagem para a direita dele enquanto ele está parado.">Virar à direita parado</label>
+          <select id="clip-turnRightIdle"></select>
+          <span class="note">Mandou para o lado (de 60° a 135°) ou para trás (mais de 135°)? Em vez de girar no lugar, ele toca a virada ou a meia-volta e sai andando dela.</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Movimento</h2>
+        <div class="sim-row">
+          <label for="speed-walk">Andar a</label>
+          <div class="with-unit"><input type="number" id="speed-walk" min="0" step="0.05"><span>m/s</span></div>
+        </div>
+        <div class="sim-row">
+          <label for="speed-run">Correr a</label>
+          <div class="with-unit"><input type="number" id="speed-run" min="0" step="0.05"><span>m/s</span></div>
+        </div>
+        <div class="sim-buttons">
+          <button class="btn small" id="natural" title="Põe em cada velocidade a que a própria animação pede: é a que não deixa o pé deslizar.">Usar o passo da animação</button>
+        </div>
+        <label class="toggle" title="Como muitos jogos fazem: a animação toca mais rápida ou mais lenta para o passo acompanhar a velocidade. Desligado, dá para ver o pé deslizar quando a velocidade não combina.">
+          <input type="checkbox" id="fit"> Acelerar ou frear a animação para o passo acompanhar a velocidade
+        </label>
+        <div class="sim-row">
+          <label for="fade" title="Quanto tempo leva para passar de uma animação para a outra.">Troca em</label>
+          <div class="with-unit"><input type="number" id="fade" min="0" max="2" step="0.05" title="Quanto tempo leva para passar de uma animação para a outra."><span>segundos</span></div>
+        </div>
+        <div class="sim-row">
+          <label for="turn" title="Parado. Andando, o giro sem clipe fica em no máximo 240° por segundo, para ser uma curva e não um estalo.">Vira a</label>
+          <div class="with-unit"><input type="number" id="turn" min="30" max="3600" step="30"><span>graus por segundo</span></div>
+        </div>
+        <p class="hint">As velocidades valem para o personagem no tamanho que ele tem no arquivo (<span id="height"></span> de altura).</p>
+      </section>
+
+      <section id="actions-box" hidden>
+        <h2>Tocar uma vez</h2>
+        <div class="sim-actions" id="actions"></div>
+        <p class="hint">As outras animações do projeto. Cada uma toca do começo ao fim e o personagem volta ao que estava fazendo.</p>
+      </section>
+
+      <section>
+        <h2>Câmera e cena</h2>
+        <div class="sim-buttons">
+          <button class="btn small" id="cam-near">De perto</button>
+          <button class="btn small" id="cam-top">De cima, como no jogo</button>
+          <button class="btn small" id="reset">Voltar ao centro</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="bones"> Mostrar os ossos</label>
+        <div class="sim-buttons">
+          <button class="btn small" id="reload" title="Busca de novo as animações do projeto (depois que uma nova chegou).">Recarregar as animações</button>
+        </div>
+        <p class="hint" id="news" hidden></p>
+      </section>
+    </aside>
+  </main>
+
+  <div class="toasts" id="toasts" aria-live="polite"></div>
+  <script type="module" src="simulador.js"></script>
+</body>
+</html>

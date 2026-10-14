@@ -1,8 +1,10 @@
-"""O terminal da tela: abre parado na pasta do projeto, só atende à própria página e não fica para trás.
+"""O terminal da tela: um por espaço, parado na pasta dele (a do jogo, a do personagem ou do modelo 3D, a
+da textura, do som ou do documento, e a da ponte na tela de entrada); só atende à própria página e não fica para trás.
 
 Sobe um servidor próprio (porta 8767) num acervo descartável (PONTE_DATA), com dois projetos de
-mentira, e fala com o terminal pelo mesmo caminho da página (WebSocket). Não usa o Blender e não
-chama IA nenhuma. Leva uns 2 minutos, por causa das esperas da faxina (``terminal.GRACE``).
+mentira, e fala com o terminal pelo mesmo caminho da página (WebSocket). O jogo, a textura e o som
+são criados pela API, como a tela faz. Não usa o Blender e não chama IA nenhuma. Leva uns 3
+minutos, por causa das esperas da faxina (``terminal.GRACE``).
 
     uv run python tests/check_terminal.py
 """
@@ -18,6 +20,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -33,8 +36,15 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x
 BARE = {"powershell.exe", "OpenConsole.exe"}
 
 
-def api(path: str, method: str = "GET") -> dict:
-    request = urllib.request.Request(f"http://{BASE}{path}", method=method, data=b"{}" if method == "POST" else None, headers={"content-type": "application/json"})
+def api(path: str, method: str = "GET", body: dict | None = None) -> dict:
+    data = json.dumps(body or {}).encode() if method in ("POST", "PATCH", "PUT") else None
+    request = urllib.request.Request(f"http://{BASE}{path}", method=method, data=data, headers={"content-type": "application/json"})
+    return json.load(urllib.request.urlopen(request, timeout=30))
+
+
+def upload(game: str, filename: str, content: bytes) -> dict:
+    """Manda uma textura ou um som para os assets do jogo, como a tela faz."""
+    request = urllib.request.Request(f"http://{BASE}/api/games/{game}/items?filename={urllib.parse.quote(filename)}", method="POST", data=content, headers={"content-type": "application/octet-stream"})
     return json.load(urllib.request.urlopen(request, timeout=30))
 
 
@@ -120,6 +130,30 @@ async def checks(data: Path, server: int, check) -> None:
     check("senha errada não abre o terminal", await refused(KEEP, token="errada"))
     check("nada abriu com as duas recusas", not api("/api/terminal")["open"] and not hanging(server))
 
+    # 0. O terminal da tela de entrada: sem projeto, na pasta da ponte, com as mesmas travas.
+    home = api("/api/terminal").get("home")
+    check("o servidor diz o nome do terminal da tela de entrada", bool(home) and home not in (KEEP, DROP), str(home))
+    check("página de outro site não abre o terminal da entrada", await refused(home, origin="http://exemplo.com"))
+    check("senha errada não abre o terminal da entrada", await refused(home, token="errada"))
+    guides = {name: (ROOT / name).read_bytes() if (ROOT / name).is_file() else None for name in ("CLAUDE.md", "AGENTS.md")}
+    async with socket(home) as ws:
+        first = json.loads(await asyncio.wait_for(ws.recv(), 10))
+        check("à primeira tela, avisa que ninguém respondeu ainda às perguntas do programa", first.get("replay") is True and first.get("answered") is False, str(first)[:120])
+        text, _ = await listen(ws, 6)
+        text = ANSI.sub("", first.get("data", "")) + text
+        names = hanging(server)
+        check("o da entrada abre parado, sem chamar nada", "powershell.exe" in names and set(names) <= BARE, ", ".join(names))
+        check("o prompt dele está na pasta da ponte", f"{ROOT.name}>" in text, text[-160:].strip())
+        await ws.send(json.dumps({"type": "input", "data": "Write-Output ('en'+'trada-ok')\r"}))
+        text, _ = await listen(ws, 4)
+        check("ele responde ao que se escreve", "entrada-ok" in text, text[-160:].strip())
+        info = api("/api/terminal")
+        check("aparece entre os abertos e os em uso, como os de projeto", home in info["open"] and home in info["talking"], str(info))
+    check("o guia da pasta da ponte não é regravado", all(((ROOT / name).read_bytes() if (ROOT / name).is_file() else None) == was for name, was in guides.items()))
+    api(f"/api/terminal/{home}/restart", "POST")
+    names = await settled(server)
+    check('"reiniciar" fecha o da entrada e não deixa processo para trás', home not in api("/api/terminal")["open"] and not names, ", ".join(names))
+
     # 1. Aberto só para olhar: vem parado no prompt da pasta, e fecha sozinho depois de a tela sair.
     async with socket(KEEP) as ws:
         text, _ = await listen(ws, 6)
@@ -145,6 +179,7 @@ async def checks(data: Path, server: int, check) -> None:
     async with socket(KEEP) as ws:
         first = json.loads(await asyncio.wait_for(ws.recv(), 5))
         check("ao voltar, o que estava escrito reaparece", first.get("replay") is True and "ponte-ok" in ANSI.sub("", first.get("data", "")))
+        check("e a tela é avisada de que outra já respondeu às perguntas do programa", first.get("answered") is True, str(first.get("answered")))
     api(f"/api/terminal/{KEEP}/restart", "POST")
     names = await settled(server)
     check('"reiniciar" fecha o terminal e o que nasceu dele', KEEP not in api("/api/terminal")["open"] and not names, ", ".join(names))
@@ -162,6 +197,113 @@ async def checks(data: Path, server: int, check) -> None:
     names = await settled(server)
     check("e não deixa processo para trás", not names, ", ".join(names))
     check("o outro projeto continua no lugar", [a["id"] for a in api("/api/state")["assets"]] == [KEEP])
+
+    # 5. O terminal do jogo: abre na pasta do jogo, com o guia do que há nele, e sai junto com o jogo.
+    game = api("/api/games", "POST", {"name": "Jogo do teste"})["id"]
+    api(f"/api/assets/{KEEP}", "PATCH", {"game": game})
+    folder = data / "games" / game
+    guide = folder / "CLAUDE.md"
+    check("página de outro site não abre o terminal do jogo", await refused(game, origin="http://exemplo.com"))
+    async with socket(game) as ws:
+        text, _ = await listen(ws, 6)
+        names = hanging(server)
+        check("o do jogo abre parado, sem chamar nada", "powershell.exe" in names and set(names) <= BARE, ", ".join(names))
+        check("o prompt dele está na pasta do jogo", f"{game}>" in text, text[-160:].strip())
+        written = guide.read_text(encoding="utf-8") if guide.is_file() else ""
+        check("a pasta do jogo ganhou o guia, com o personagem dele", written.startswith(MARK) and "Jogo do teste" in written and KEEP in written and (folder / "AGENTS.md").is_file(), written[:200])
+        await ws.send(json.dumps({"type": "input", "data": "Write-Output ('jo'+'go-ok')\r"}))
+        text, _ = await listen(ws, 4)
+        check("ele responde ao que se escreve", "jogo-ok" in text, text[-160:].strip())
+    api(f"/api/assets/{KEEP}", "PATCH", {"game": None})
+    async with socket(game) as ws:
+        first = json.loads(await asyncio.wait_for(ws.recv(), 5))
+        check("ao voltar ao jogo, o terminal é o mesmo", first.get("replay") is True and "jogo-ok" in ANSI.sub("", first.get("data", "")))
+        check("e o guia foi regravado com o que mudou no jogo", KEEP not in guide.read_text(encoding="utf-8"))
+        api(f"/api/assets/{KEEP}", "PATCH", {"game": game})
+        answer = await asyncio.to_thread(api, f"/api/games/{game}", "DELETE")
+        _, kinds = await listen(ws, 3)
+        check("apagar o jogo com o terminal aberto é aceito e avisa a tela", answer.get("deleted") == game and "exit" in kinds, str(kinds))
+    check("a pasta do jogo sai inteira do disco", not folder.exists(), "" if not folder.exists() else "sobrou: " + ", ".join(p.name for p in folder.iterdir()))
+    names = await settled(server)
+    check("e não deixa processo para trás", not names, ", ".join(names))
+    state = api("/api/state")
+    check("o personagem do jogo fica no disco, sem jogo", [(a["id"], a.get("game")) for a in state["assets"]] == [(KEEP, None)] and not state["games"], str([(a["id"], a.get("game")) for a in state["assets"]]))
+    async with socket(game) as ws:
+        first = json.loads(await asyncio.wait_for(ws.recv(), 5))
+        check("jogo que não existe mais não abre terminal: a tela é avisada", first.get("type") == "error", str(first)[:120])
+    check("e nada fica aberto", game not in api("/api/terminal")["open"] and not hanging(server))
+
+    # 6. Cada espaço tem o terminal dele: o modelo 3D, a textura e o som abrem na pasta deles, com o guia de cada um.
+    check("o servidor diz à página que textura e som têm terminal", api("/api/terminal").get("items") is True)
+    game = api("/api/games", "POST", {"name": "Jogo dos espaços"})["id"]
+    folder = data / "games" / game
+    api(f"/api/assets/{KEEP}", "PATCH", {"game": game, "role": "modelo"})
+    async with socket(KEEP) as ws:
+        text, _ = await listen(ws, 6)
+        written = (keep / "CLAUDE.md").read_text(encoding="utf-8")
+        check("o terminal do modelo 3D abre na pasta dele", f"{KEEP}>" in text, text[-160:].strip())
+        check("o guia dele diz que é um asset do jogo e que é nele que se mexe", written.startswith(MARK) and "# Asset: Teste fica" in written and "Jogo dos espaços" in written and "neste asset que você vai mexer" in written, written[:300])
+    api(f"/api/assets/{KEEP}", "PATCH", {"role": "personagem"})
+    async with socket(KEEP) as ws:
+        await listen(ws, 3)
+        check("o guia acompanha o papel, a cada tela que se liga", "# Personagem: Teste fica" in (keep / "CLAUDE.md").read_text(encoding="utf-8"))
+    api(f"/api/terminal/{KEEP}/restart", "POST")
+
+    texture = upload(game, "Muro Velho.png", b"\x89PNG" + b"0" * 60)["id"]
+    spot = folder / "assets" / texture
+    check("página de outro site não abre o terminal da textura", await refused(texture, origin="http://exemplo.com"))
+    async with socket(texture) as ws:
+        text, _ = await listen(ws, 6)
+        names = hanging(server)
+        check("o da textura abre parado, sem chamar nada", "powershell.exe" in names and set(names) <= BARE, ", ".join(names))
+        check("o prompt dele está na pasta da textura", f"{texture}>" in text, text[-160:].strip())
+        written = (spot / "CLAUDE.md").read_text(encoding="utf-8") if (spot / "CLAUDE.md").is_file() else ""
+        check("a pasta da textura ganhou o guia, com o arquivo e o jogo", written.startswith(MARK) and "`Muro Velho.png`" in written and "Jogo dos espaços" in written and (spot / "AGENTS.md").is_file(), written[:300])
+        check("a textura continua na lista, com o arquivo dela", [(i["id"], i["file"]) for i in api("/api/state")["items"]] == [(texture, "Muro Velho.png")])
+        answer = await asyncio.to_thread(api, f"/api/items/{texture}", "DELETE")
+        _, kinds = await listen(ws, 3)
+        check("apagar a textura com o terminal aberto é aceito e avisa a tela", answer.get("deleted") == texture and "exit" in kinds, str(kinds))
+    check("a pasta da textura sai inteira do disco", not spot.exists(), "" if not spot.exists() else "sobrou: " + ", ".join(p.name for p in spot.iterdir()))
+    async with socket(texture) as ws:
+        first = json.loads(await asyncio.wait_for(ws.recv(), 5))
+        check("textura que não existe mais não abre terminal: a tela é avisada", first.get("type") == "error", str(first)[:120])
+
+    # 6b. A aba de gestão: o documento tem o terminal dele, e apagar a aba com ele aberto leva tudo.
+    board = api(f"/api/games/{game}/tabs", "POST", {"name": "Gestão", "kind": "gestao"})
+    check("o jogo ganha a aba de gestão, depois das duas que vêm com ele", [(t["id"], t["kind"]) for t in api("/api/state")["games"][0]["tabs"]] == [("characters", "personagens"), ("assets", "assets"), (board["id"], "gestao")], str(board))
+    document = api(f"/api/games/{game}/documents", "POST", {"name": "Regras do jogo", "tab": board["id"]})
+    task = api(f"/api/games/{game}/tasks", "POST", {"title": "Fazer o portão", "tab": board["id"]})
+    page = folder / "assets" / document["id"]
+    check("o documento nasce como um arquivo de texto, com o endereço que a tela usa", (page / "Regras do jogo.md").read_text(encoding="utf-8") == "# Regras do jogo\n\n" and document.get("files_base", "").endswith(document["id"]) and bool(document.get("modified")), str(document))
+    check("página de outro site não abre o terminal do documento", await refused(document["id"], origin="http://exemplo.com"))
+    async with socket(document["id"]) as ws:
+        text, _ = await listen(ws, 6)
+        check("o prompt do terminal do documento está na pasta dele", f"{document['id']}>" in text, text[-160:].strip())
+        written = (page / "CLAUDE.md").read_text(encoding="utf-8") if (page / "CLAUDE.md").is_file() else ""
+        check("a pasta do documento ganhou o guia, com o arquivo e o jogo", written.startswith(MARK) and "# Documento: Regras do jogo" in written and "`Regras do jogo.md`" in written and "Jogo dos espaços" in written, written[:300])
+        saved = api(f"/api/items/{document['id']}/text", "PUT", {"text": "# Regras\n\n- [ ] uma\n"})
+        check("o texto escrito na tela é gravado, com o terminal aberto na pasta", (page / "Regras do jogo.md").read_text(encoding="utf-8") == "# Regras\n\n- [ ] uma\n" and saved["size_bytes"] == 20, str(saved))
+        state = api("/api/state")
+        check("o estado traz a tarefa e o documento, e só o documento entre os arquivos", [t["id"] for t in state["tasks"]] == [task["id"]] and [(i["id"], i["kind"]) for i in state["items"]] == [(document["id"], "documento")])
+        check("mudar a tarefa de coluna", api(f"/api/tasks/{task['id']}", "PATCH", {"status": "feito"})["status"] == "feito")
+        answer = await asyncio.to_thread(api, f"/api/games/{game}/tabs/{board['id']}", "DELETE")
+        _, kinds = await listen(ws, 3)
+        check("apagar a aba de gestão com o terminal de um documento aberto é aceito e avisa a tela", answer.get("deleted") == board["id"] and "exit" in kinds, str(kinds))
+    state = api("/api/state")
+    check("a pasta do documento sai inteira do disco, com as tarefas da aba", not page.exists() and state["tasks"] == [] and state["items"] == [] and [t["id"] for t in state["games"][0]["tabs"]] == ["characters", "assets"], "" if not page.exists() else "sobrou: " + ", ".join(p.name for p in page.iterdir()))
+
+    sound = upload(game, "passo.wav", b"RIFF" + b"0" * 96)["id"]
+    async with socket(sound) as ws:
+        await listen(ws, 5)
+        await ws.send(json.dumps({"type": "input", "data": "Write-Output ('s'+'om-ok')\r"}))
+        text, _ = await listen(ws, 4)
+        check("o terminal do som responde ao que se escreve", "som-ok" in text, text[-160:].strip())
+        answer = await asyncio.to_thread(api, f"/api/games/{game}", "DELETE")
+        _, kinds = await listen(ws, 3)
+        check("apagar o jogo com o terminal de um som aberto é aceito e avisa a tela", answer.get("deleted") == game and "exit" in kinds, str(kinds))
+    check("a pasta do jogo sai inteira do disco, com a do som", not folder.exists(), "" if not folder.exists() else "sobrou: " + ", ".join(str(p.relative_to(folder)) for p in folder.rglob("*")))
+    names = await settled(server)
+    check("e não deixa processo para trás", not api("/api/terminal")["open"] and not names, ", ".join(names))
 
 
 def main() -> int:

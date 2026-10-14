@@ -24,85 +24,155 @@
       <img src="icon.svg" alt="" width="22" height="22">
       <span>PonteAnimada</span>
     </div>
-    <!-- Dentro de um projeto: voltar, o nome dele e o que ele é. -->
+    <!-- Dentro de um jogo: voltar, o nome do que está aberto (o jogo, um personagem ou um asset) e o que ele é. -->
     <div class="crumb" id="crumb" hidden>
-      <button class="btn small" id="back-home" title="Voltar à tela de projetos">← Projetos</button>
-      <button class="project-name" id="project-name" title="Clique para mudar o nome do projeto"></button>
-      <span class="project-facts" id="project-facts"></span>
+      <button class="btn small" id="back"></button>
+      <button class="project-name" id="crumb-name" title="Clique para mudar o nome"></button>
+      <span class="project-facts" id="crumb-facts"></span>
     </div>
     <div class="status" id="status" aria-live="polite"></div>
   </header>
 
-  <!-- Tela de entrada: cada personagem é um projeto. -->
-  <section class="home" id="home">
-    <div class="home-inner">
-      <header class="home-title">
-        <h1>Projetos</h1>
-        <p class="hint">Cada personagem é um projeto separado. Abra um para ver o modelo, as animações dele e o terminal na pasta dele.</p>
-      </header>
-      <input type="file" id="file-input" accept=".fbx,.glb,.gltf,.blend,.obj,.zip,.png,.jpg,.jpeg,.tga,.bmp,.tif,.tiff,.webp,.exr,.dds,.mtl,.bin" multiple hidden>
-      <div class="picker" id="home-projects"></div>
-      <header class="home-head" id="meshy-head" hidden>
-        <h2>Pedidos ao Meshy</h2>
-      </header>
-      <div class="meshy-grid" id="home-meshy"></div>
-      <section class="activity" id="home-activity" aria-live="polite"></section>
-    </div>
-  </section>
-
-  <!-- Tela do projeto: o visor à esquerda; as animações e o terminal à direita. -->
-  <main class="project" id="project" hidden>
-    <section class="stage">
-      <div class="viewport" id="viewport">
-        <div class="viewport-empty" id="viewport-empty"></div>
-        <div class="viewport-title" id="viewport-title"></div>
-        <div class="views" id="views" role="group" aria-label="Vista">
-          <button type="button" data-view="front" title="Ver de frente">Frente</button>
-          <button type="button" data-view="side" title="Ver de lado">Lado</button>
-          <button type="button" data-view="back" title="Ver de trás">Trás</button>
-          <button type="button" data-view="top" title="Ver de cima">Cima</button>
+  <!-- À esquerda, a tela de onde se está; à direita, o terminal (e, com um personagem aberto, as animações dele). -->
+  <main class="layout" id="layout">
+    <div class="left">
+      <!-- Tela de entrada: cada projeto é um jogo. -->
+      <section class="home" id="home">
+        <div class="home-inner">
+          <header class="home-title">
+            <h1>Projetos</h1>
+            <p class="hint">Cada projeto é um jogo: dentro dele ficam as abas, com os personagens e as animações, os assets e a gestão. O terminal ao lado abre na pasta da ponte; dentro de um jogo, na pasta do jogo.</p>
+          </header>
+          <div class="picker" id="home-games"></div>
+          <header class="home-head" id="loose-head" hidden>
+            <h2 id="loose-title">Sem jogo</h2>
+            <p class="hint" id="loose-hint">Personagens e modelos que ainda não estão em nenhum jogo. Escolha o jogo de cada um.</p>
+          </header>
+          <div class="picker" id="home-loose"></div>
+          <header class="home-head" id="meshy-head" hidden>
+            <h2>Pedidos ao Meshy</h2>
+          </header>
+          <div class="meshy-grid" id="home-meshy"></div>
+          <section class="activity" id="home-activity" aria-live="polite"></section>
         </div>
-      </div>
-      <div class="transport" id="transport">
-        <button class="icon-btn" id="play" aria-label="Reproduzir ou pausar" title="Espaço">▶</button>
-        <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Posição na animação">
-        <span class="time" id="time">—</span>
-        <select id="speed" aria-label="Velocidade">
-          <option value="0.25">0,25×</option>
-          <option value="0.5">0,5×</option>
-          <option value="1" selected>1×</option>
-          <option value="2">2×</option>
-        </select>
-        <label class="toggle" title="A câmera acompanha o personagem quando a animação o leva embora."><input type="checkbox" id="follow" checked> Seguir</label>
-        <label class="toggle" title="Mostra a animação sem o deslocamento, só para ver."><input type="checkbox" id="in-place-view"> Parado</label>
-        <label class="toggle"><input type="checkbox" id="bones"> Ossos</label>
-        <label class="toggle"><input type="checkbox" id="wire"> Malha</label>
-      </div>
-    </section>
+      </section>
+
+      <!-- Tela do jogo: as abas dele. Characters e Assets vêm com o jogo; as outras o dono cria. -->
+      <section class="home" id="game" hidden>
+        <div class="home-inner">
+          <nav class="tabs" id="game-tabs" role="tablist" aria-label="Abas do jogo"></nav>
+          <div class="tab-head">
+            <p class="hint" id="tab-hint"></p>
+            <span class="tab-tools" id="tab-tools"></span>
+          </div>
+          <!-- Numa aba de personagens ou de assets: um cartão cada. -->
+          <div class="picker" id="tab-cards"></div>
+          <!-- Numa aba de gestão: o quadro de tarefas e os documentos. -->
+          <section class="gestao" id="tab-gestao" hidden>
+            <form class="task-new" id="task-new">
+              <input type="text" class="field" id="task-title" maxlength="200" placeholder="Nova tarefa: escreva e aperte Enter" aria-label="Nova tarefa" autocomplete="off">
+              <button type="submit" class="btn small">Adicionar</button>
+            </form>
+            <div class="board" id="board"></div>
+            <header class="home-head">
+              <h2>Documentos <span class="count" id="doc-count"></span></h2>
+              <p class="hint">Textos do jogo: ideias, regras, roteiro de missão. Abra um para ler e escrever; a IA chamada no terminal dele também escreve.</p>
+            </header>
+            <div class="picker" id="tab-docs"></div>
+          </section>
+          <section class="activity" id="game-activity" aria-live="polite"></section>
+        </div>
+      </section>
+
+      <!-- Um personagem, um asset ou um documento aberto: o visor. -->
+      <section class="stage" id="project" hidden>
+        <div class="viewport" id="viewport">
+          <div class="viewport-empty" id="viewport-empty"></div>
+          <!-- Textura, som e documento não vão para o visor 3D: aparecem por cima dele. -->
+          <img class="stage-image" id="stage-image" alt="" hidden>
+          <audio class="stage-audio" id="stage-audio" controls hidden></audio>
+          <div class="stage-doc" id="stage-doc" hidden>
+            <div class="doc-bar">
+              <span class="doc-state" id="doc-state" aria-live="polite"></span>
+              <button type="button" class="btn small" id="doc-edit" title="Troca a página pelo texto, para você escrever.">Editar</button>
+              <button type="button" class="btn small" id="doc-cancel" hidden>Cancelar</button>
+              <button type="button" class="btn small ok" id="doc-save" hidden>Salvar</button>
+            </div>
+            <article class="doc-page" id="doc-page"></article>
+            <textarea class="doc-text" id="doc-text" spellcheck="false" aria-label="Texto do documento" hidden></textarea>
+          </div>
+          <div class="viewport-title" id="viewport-title"></div>
+          <div class="views" id="views" role="group" aria-label="Vista">
+            <button type="button" data-view="front" title="Ver de frente">Frente</button>
+            <button type="button" data-view="side" title="Ver de lado">Lado</button>
+            <button type="button" data-view="back" title="Ver de trás">Trás</button>
+            <button type="button" data-view="top" title="Ver de cima">Cima</button>
+          </div>
+        </div>
+        <div class="transport" id="transport">
+          <button class="icon-btn" id="play" aria-label="Reproduzir ou pausar" title="Espaço">▶</button>
+          <input type="range" id="scrub" min="0" max="1" step="0.001" value="0" aria-label="Posição na animação">
+          <span class="time" id="time">—</span>
+          <select id="speed" aria-label="Velocidade">
+            <option value="0.25">0,25×</option>
+            <option value="0.5">0,5×</option>
+            <option value="1" selected>1×</option>
+            <option value="2">2×</option>
+          </select>
+          <label class="toggle" title="A câmera acompanha o personagem quando a animação o leva embora."><input type="checkbox" id="follow" checked> Seguir</label>
+          <label class="toggle" title="Mostra a animação sem o deslocamento, só para ver."><input type="checkbox" id="in-place-view"> Parado</label>
+          <label class="toggle"><input type="checkbox" id="bones"> Ossos</label>
+          <label class="toggle"><input type="checkbox" id="wire"> Malha</label>
+        </div>
+      </section>
+    </div>
 
     <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" title="Arraste para mudar a largura"></div>
 
     <aside class="side">
-      <section class="panel anims">
+      <!-- Com um personagem aberto. -->
+      <section class="panel anims" id="anims-panel" hidden>
         <header class="panel-head">
           <h2>Animações <span class="count" id="anim-count"></span></h2>
+          <a class="btn small" id="sim-link" href="simulador.html" title="Anda com o personagem pelo teclado, com as animações trocando sozinhas (parado, andando, correndo), para ver como ficam num jogo." hidden>Simular</a>
           <button class="btn small" id="mixamo-button" title="Escolha um ou mais FBX baixados do Mixamo: o Blender aplica cada um neste personagem, por trás.">+ Mixamo (.fbx)</button>
           <input type="file" id="mixamo-input" accept=".fbx" multiple hidden>
         </header>
         <div class="anim-list" id="anim-list"></div>
       </section>
-      <section class="panel term">
+      <!-- Com um asset aberto (modelo 3D, textura ou som) ou um documento. -->
+      <section class="panel details" id="details-panel" hidden>
+        <header class="panel-head">
+          <h2><span id="details-title">Asset</span> <span class="count" id="details-kind"></span></h2>
+          <button class="btn small" id="details-move" title="Este modelo é um personagem: passa para Characters, onde recebe animação." hidden>Passar para Characters</button>
+          <button class="btn small" id="details-delete">Apagar</button>
+        </header>
+        <dl class="facts" id="details"></dl>
+      </section>
+      <!-- O painel é um só e mostra o terminal de onde se está: o do jogo, o do personagem ou o do asset. -->
+      <section class="panel term" id="term-panel">
         <header class="panel-head">
           <h2>Terminal <span class="count" id="term-where"></span></h2>
           <span class="term-state" id="term-state"></span>
-          <button class="btn link small" id="term-restart" title="Fecha este terminal, com o que estiver rodando nele, e abre um novo na pasta do projeto.">reiniciar</button>
+          <button class="btn link small" id="term-restart" title="Fecha este terminal, com o que estiver rodando nele, e abre um novo na mesma pasta.">reiniciar</button>
         </header>
         <div class="terminal" id="terminal"></div>
       </section>
     </aside>
   </main>
 
-  <div class="dropzone" id="dropzone" hidden><div>Solte para enviar</div></div>
+  <input type="file" id="file-input" accept=".fbx,.glb,.gltf,.blend,.obj,.zip,.png,.jpg,.jpeg,.tga,.bmp,.tif,.tiff,.webp,.exr,.dds,.mtl,.bin" multiple hidden>
+  <input type="file" id="asset-input" accept=".fbx,.glb,.gltf,.blend,.obj,.zip,.png,.jpg,.jpeg,.webp,.bmp,.gif,.tga,.tif,.tiff,.exr,.hdr,.dds,.psd,.mtl,.bin,.wav,.ogg,.mp3,.flac" multiple hidden>
+  <!-- Dentro de um jogo, o lado em que se solta diz o que o arquivo é. -->
+  <div class="dropzone" id="dropzone" hidden>
+    <div class="drop-half" id="drop-single">Solte para enviar</div>
+    <div class="drop-half" data-as="personagem">Solte aqui<strong>personagem</strong></div>
+    <div class="drop-half" data-as="asset">Solte aqui<strong>asset</strong><small>modelo 3D, textura ou som</small></div>
+  </div>
+  <!-- A escolha do gerador de animação: perguntada ao abrir a janela e reaberta pela barra de cima. -->
+  <div class="engine-pick" id="engine-pick" hidden></div>
+  <!-- Uma caixa por cima da tela, para o que pede mais de uma resposta: aba nova, tarefa. -->
+  <div class="engine-pick" id="dialog" hidden></div>
   <div class="toasts" id="toasts" aria-live="polite"></div>
   <script type="module" src="app.js"></script>
 </body>

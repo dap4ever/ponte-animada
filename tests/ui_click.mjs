@@ -5,8 +5,10 @@
 //
 // Cada passo é "click:<seletor css>", "clicktext:<seletor>|<texto>", "file:<seletor>|<arquivo>"
 // (escolhe um arquivo num campo de envio), "wait:<ms>", "shot:<nome>", "eval:<expressão js>"
-// "time" (lê o relógio do visualizador) ou "dialogs:accept" / "dialogs:dismiss" (o que
-// responder às caixas de confirmação que aparecerem dali em diante; o padrão é aceitar).
+// "time" (lê o relógio do visualizador), "mouse:<x>,<y>" (um clique num ponto da janela),
+// "keydown:<código>" / "keyup:<código>" (segura ou solta uma tecla: KeyW, ArrowUp, ShiftLeft,
+// Digit1...), "type:<texto>" e "enter" (escreve no campo com o foco, como no terminal da tela) ou "dialogs:accept" / "dialogs:dismiss" (o que responder às caixas de confirmação
+// que aparecerem dali em diante; o padrão é aceitar).
 
 import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -74,12 +76,12 @@ await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.setWebLifecycleState', { state: 'active' });
 await send('Emulation.setDeviceMetricsOverride', { width: 1500, height: 1000, deviceScaleFactor: 1, mobile: false });
 await send('Page.navigate', { url });
-// Espera o modelo carregar. Na tela nova o visor avisa (data-visor no body) e a tela de projetos não
-// tem o que esperar; na antiga (/antiga/) o relógio passa a mostrar o tempo do clipe
-// ("1.23 / 20.00 s · quadro 37").
+// Espera a tela ficar pronta. Na tela nova o visor avisa quando mostra o modelo (data-visor no body), e a
+// tela de projetos e a do jogo (#g/<jogo>) avisam quando foram desenhadas (data-tela); na antiga
+// (/antiga/) o relógio passa a mostrar o tempo do clipe ("1.23 / 20.00 s · quadro 37").
 for (let i = 0; i < 150; i++) {
   await sleep(400);
-  const ready = await evaluate("document.body.dataset.visor || (!/^#(p|asset|result|final)\\//.test(location.hash) && document.querySelector('#home') && !document.querySelector('#home').hidden ? 'entrada' : '') || (/ s · quadro/.test(document.querySelector('#time')?.textContent || '') ? 'relogio' : '')");
+  const ready = await evaluate("document.body.dataset.visor || (/^#g\\//.test(location.hash) ? (document.body.dataset.tela === 'jogo' ? 'jogo' : '') : !/^#(p|i|asset|result|final)\\//.test(location.hash) && (document.body.dataset.tela === 'entrada' || (location.pathname.startsWith('/antiga') && document.querySelector('#home') && !document.querySelector('#home').hidden)) ? 'entrada' : '') || (/ s · quadro/.test(document.querySelector('#time')?.textContent || '') ? 'relogio' : '')");
   if (ready && i > 3) break;
 }
 
@@ -99,6 +101,27 @@ for (const step of steps) {
     const { result: node } = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector });
     const out = node?.nodeId ? await send('DOM.setFileInputFiles', { nodeId: node.nodeId, files: [file] }) : { error: { message: 'NAO ACHEI' } };
     console.log('file', selector, '->', out.error ? out.error.message : 'ok');
+  } else if (kind === 'mouse') {
+    // Um clique de verdade num ponto da janela (x,y em pixels), como o do simulador no chão.
+    const [x, y] = arg.split(',').map(Number);
+    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+    await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+    console.log('mouse', arg, '-> ok');
+  } else if (kind === 'keydown' || kind === 'keyup') {
+    // Uma tecla segurada ou solta, pelo código dela (KeyW, ArrowUp, ShiftLeft, Digit1...).
+    const key = arg.startsWith('Key') ? arg.slice(3).toLowerCase() : arg.startsWith('Digit') ? arg.slice(5) : arg.replace(/(Left|Right)$/, (m) => (arg.startsWith('Arrow') ? m : ''));
+    const vk = arg.startsWith('Key') ? arg.charCodeAt(3) : arg.startsWith('Digit') ? arg.charCodeAt(5) : { ShiftLeft: 16, ShiftRight: 16, ArrowLeft: 37, ArrowUp: 38, ArrowRight: 39, ArrowDown: 40, Space: 32 }[arg] || 0;
+    await send('Input.dispatchKeyEvent', { type: kind === 'keydown' ? 'rawKeyDown' : 'keyUp', code: arg, key, windowsVirtualKeyCode: vk });
+    console.log(kind, arg, '-> ok');
+  } else if (kind === 'type') {
+    // Escreve no campo que está com o foco, como quem digita (o terminal da tela, por exemplo).
+    await send('Input.insertText', { text: arg });
+    console.log('type', arg, '-> ok');
+  } else if (kind === 'enter') {
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', code: 'Enter', key: 'Enter', windowsVirtualKeyCode: 13 });
+    console.log('enter -> ok');
   } else if (kind === 'time') console.log('relogio:', await evaluate("document.querySelector('#time').textContent"));
   else if (kind === 'eval') console.log('eval:', JSON.stringify(await evaluate(arg)));
   else if (kind === 'shot') {

@@ -10,8 +10,9 @@ import argparse
 import sys
 from pathlib import Path
 
-from . import ardy, engines, jobs, kimodo, meshy, pipeline, store
+from . import ardy, engines, games, jobs, kimodo, meshy, pipeline, store
 from .config import DATA, KIMODO_MAX_SAMPLES, KIMODO_MODEL, SETTINGS
+from .terminal import NOTES
 
 
 def _run_job(kind: str, title: str, params: dict, work) -> dict:
@@ -55,6 +56,10 @@ def cmd_status(_args) -> None:
     assets, motions, results = store.list_all("asset"), store.list_all("motion"), store.list_all("result")
     closed = [a for a in assets if a.get("final")]
     print(f"Acervo  : {len(assets)} projeto(s) · {len(motions)} animação(ões) · {len(results)} prévia(s) · {len(closed)} personagem(ns) encerrado(s)")
+    # Os jogos: cada um junta personagens e assets. `ponte game show <id>` diz quais.
+    for game in games.list_games():
+        content = games.contents(game["id"])
+        print(f"Jogo    : {game['name']} ({game['id']}) · {len(content['characters'])} personagem(ns) · {len(content['models'])} modelo(s) · {len(content['textures'])} textura(s) · {len(content['sounds'])} som(ns)")
     # Pedidos ao Meshy que ainda não viraram projeto: a imagem espera a aprovação dele, e a nota de uma reprovada diz o que mudar.
     for r in meshy.list_requests():
         if r["status"] != meshy.READY:
@@ -87,8 +92,157 @@ def cmd_status(_args) -> None:
 
 def cmd_asset_add(args) -> None:
     extra = getattr(args, "textures", None) or []
+    game, role = getattr(args, "game", None), getattr(args, "role", None)
+    if game:
+        games.get(game)  # jogo que não existe: recusa antes de abrir o Blender
     out = _run_job("inspecao", f"Inspecionar {args.file.name}", {}, lambda log: {"asset_id": pipeline.add_asset(args.file, args.name, log, extra)["id"]})
+    if game:
+        games.assign(out["asset_id"], game, role)
+    elif role:
+        games.set_role(out["asset_id"], role)
     print(out["asset_id"])
+
+
+def cmd_game_list(_args) -> None:
+    for game in games.list_games():
+        print(f"{game['id']:<32} {game['name']}" + (f"  (código: {game['code_path']})" if game.get("code_path") else ""))
+    loose = [a for a in store.list_all("asset") if not a.get("game") or not games.exists(a["game"])]
+    if loose:
+        print("sem jogo: " + ", ".join(f"{a['name']} ({a['id']})" for a in loose))
+
+
+def cmd_game_new(args) -> None:
+    print(games.create(args.name, args.path)["id"])
+
+
+def cmd_game_show(args) -> None:
+    """O que há num jogo: é a lista que a IA chamada no terminal dele consulta."""
+    content = games.contents(args.id)
+    game = content["game"]
+    print(f"{game['name']} ({game['id']})")
+    print(f"  pasta na ponte : {games.folder(args.id)}")
+    print(f"  código do jogo : {game.get('code_path') or '(não dito: `ponte game path`)'}")
+    results = store.list_all("result")
+    names = {tab["id"]: tab["name"] for tab in content["tabs"]}
+    builtin = {tab["id"] for tab in games.BUILTIN_TABS}
+
+    def where(thing: dict, kind: str) -> str:
+        """Em que aba a coisa está, quando não é numa das duas que vêm com o jogo."""
+        tab = games.tab_of(game, thing, kind)
+        return f" · aba {names[tab]}" if tab in names and tab not in builtin else ""
+
+    for title, members in (("Characters", content["characters"]), ("Assets: modelos 3D", content["models"])):
+        print(f"\n{title}")
+        for a in members:
+            s = a.get("summary") or {}
+            count = sum(1 for r in results if r["asset_id"] == a["id"])
+            notes = store.project_folder(a["id"]) / NOTES
+            print(f"  {a['name']}  ({a['id']}) · {a.get('verdict') or a['status']} · {s.get('rig') or 'sem rig'} · {count} animação(ões){where(a, games.asset_tab_kind(a))}")
+            print(f"    pasta: {store.project_folder(a['id'])}" + (f"\n    notas: {notes}" if notes.is_file() else ""))
+        if not members:
+            print("  (nenhum)")
+    for title, items in (("Assets: texturas", content["textures"]), ("Assets: sons", content["sounds"]), ("Gestão: documentos", content["documents"])):
+        print(f"\n{title}")
+        for item in items:
+            print(f"  {item['name']}  ({item['id']}){where(item, games.item_tab_kind(item))} · {games.item_path(item)}")
+        if not items:
+            print("  (nenhum)")
+    print("\nAbas da tela")
+    for tab in content["tabs"]:
+        print(f"  {_tab_line(tab)}")
+    if content["tasks"]:
+        print(f"\nGestão: {len(content['tasks'])} tarefa(s) no quadro (`ponte game task list {args.id}`)")
+
+
+TAB_KIND = {"personagens": "de personagens", "assets": "de assets", "gestao": "de gestão"}
+TASK_STATE = {"a_fazer": "A fazer", "fazendo": "Fazendo", "feito": "Feito"}
+
+
+def _tab_line(tab: dict) -> str:
+    """Uma aba e o que há nela, numa linha (``tab`` como vem em ``games.contents``)."""
+    if tab["kind"] == "personagens":
+        inside = f"{len(tab['characters'])} personagem(ns)"
+    elif tab["kind"] == "assets":
+        inside = f"{len(tab['models'])} modelo(s) · {len(tab['files'])} textura(s) e som(ns)"
+    else:
+        inside = f"{len(tab['tasks'])} tarefa(s) · {len(tab['documents'])} documento(s)"
+    return f"{tab['name']}  ({tab['id']}) · {TAB_KIND[tab['kind']]} · {inside}"
+
+
+def cmd_game_tab_list(args) -> None:
+    for tab in games.contents(args.game)["tabs"]:
+        print(_tab_line(tab))
+
+
+def cmd_game_tab_new(args) -> None:
+    print(games.add_tab(args.game, args.name, args.kind)["id"])
+
+
+def cmd_game_add(args) -> None:
+    for asset_id in args.projects:
+        asset = games.assign(asset_id, args.game, args.role)
+        if args.tab:
+            asset = games.place(asset_id, args.tab)
+        tab = games.get_tab(args.game, games.tab_of(args.game, asset, games.asset_tab_kind(asset)))
+        print(f"{asset['name']} ({asset_id}) → {args.game} como {games.role_of(asset)}, na aba {tab['name']}")
+
+
+def cmd_game_path(args) -> None:
+    print(games.set_code_path(args.id, args.path).get("code_path") or "(sem pasta)")
+
+
+def cmd_game_file(args) -> None:
+    """Uma textura ou um som, já no disco, entra nos assets do jogo; um .md ou .txt, nos documentos de uma aba de gestão."""
+    if args.name and len(args.files) > 1:
+        raise ValueError("--name vale para um arquivo só.")
+    for path in args.files:
+        print(games.add_item(args.game, path, args.name, args.tab)["id"])
+
+
+def cmd_game_doc(args) -> None:
+    """Cria um documento em branco numa aba de gestão e diz onde o arquivo ficou, para quem vai escrevê-lo."""
+    document = games.new_document(args.game, args.name, args.tab)
+    print(f"{document['id']}\n{games.item_path(document)}")
+
+
+def cmd_game_task_list(args) -> None:
+    """O quadro de tarefas de agora, aba por aba e coluna por coluna."""
+    boards = [tab for tab in games.contents(args.game)["tabs"] if tab["kind"] == "gestao"]
+    if not boards:
+        print('(o jogo não tem aba de gestão: `ponte game tab new <jogo> "Gestão" --kind gestao`)')
+    for tab in boards:
+        print(f"{tab['name']}  ({tab['id']})")
+        for state in games.TASK_STATES:
+            tasks = [task for task in tab["tasks"] if task.get("status") == state]
+            print(f"  {TASK_STATE[state]} ({len(tasks)})")
+            for task in tasks:
+                print(f"    {task['id']:<44} {task['title']}")
+                for line in (task.get("notes") or "").splitlines():
+                    print(f"      {line}")
+
+
+def cmd_game_task_add(args) -> None:
+    print(games.add_task(args.game, args.title, args.tab, args.notes or "", args.status)["id"])
+
+
+def _print_task(task: dict) -> None:
+    print(f"{task['id']} · {TASK_STATE[task['status']]} · {task['title']}")
+
+
+def cmd_game_task_move(args) -> None:
+    _print_task(games.update_task(args.task, status=args.status))
+
+
+def cmd_game_task_edit(args) -> None:
+    if args.title is None and args.notes is None and args.tab is None:
+        raise ValueError("Diga o que mudar: --title, --notes ou --tab.")
+    _print_task(games.update_task(args.task, title=args.title, notes=args.notes, tab=args.tab))
+
+
+def cmd_game_task_delete(args) -> None:
+    games.get_task(args.task)  # tarefa que não existe: avisa, em vez de sair calado
+    games.delete_task(args.task)
+    print(f"apagada: {args.task}")
 
 
 def cmd_asset_textures(args) -> None:
@@ -370,7 +524,73 @@ def main() -> None:
     p.add_argument("file", type=Path)
     p.add_argument("--name")
     p.add_argument("--textures", type=Path, nargs="+", help="arquivos de textura ou a pasta delas")
+    p.add_argument("--game", metavar="JOGO", help="id do jogo em que o modelo entra (ver `ponte game list`)")
+    p.add_argument("--role", choices=games.ROLES, help="o que ele é no jogo: personagem (o padrão) ou modelo, que fica entre os assets")
     p.set_defaults(fn=cmd_asset_add)
+
+    game = sub.add_parser("game", help="os jogos: cada um junta os personagens e os assets dele").add_subparsers(dest="sub", required=True)
+    game.add_parser("list", help="os jogos e os projetos que ainda não estão em nenhum").set_defaults(fn=cmd_game_list)
+    p = game.add_parser("new", help="cria um jogo")
+    p.add_argument("name")
+    p.add_argument("--path", help="a pasta onde está o código do jogo")
+    p.set_defaults(fn=cmd_game_new)
+    p = game.add_parser("show", help="o que há no jogo: personagens e assets, com a pasta de cada um")
+    p.add_argument("id")
+    p.set_defaults(fn=cmd_game_show)
+    p = game.add_parser("add", help="põe no jogo projetos que já existem (personagens ou modelos 3D)")
+    p.add_argument("game", help="id do jogo")
+    p.add_argument("projects", nargs="+", metavar="PROJETO", help="id do projeto")
+    p.add_argument("--role", choices=games.ROLES, help="muda o que ele é no jogo: personagem ou modelo (asset)")
+    p.add_argument("--tab", metavar="ABA", help="a aba da tela do jogo em que ele fica, pelo nome ou pelo id (ela diz também o que ele é)")
+    p.set_defaults(fn=cmd_game_add)
+    p = game.add_parser("path", help="diz onde está o código do jogo (sem a pasta, tira a que estava)")
+    p.add_argument("id")
+    p.add_argument("path", nargs="?")
+    p.set_defaults(fn=cmd_game_path)
+    p = game.add_parser("file", help="põe no jogo uma textura ou um som (assets) ou um documento .md ou .txt (aba de gestão)")
+    p.add_argument("game", help="id do jogo")
+    p.add_argument("files", type=Path, nargs="+")
+    p.add_argument("--name", help="nome do asset na tela (padrão: o nome do arquivo)")
+    p.add_argument("--tab", metavar="ABA", help="a aba em que ele fica, pelo nome ou pelo id")
+    p.set_defaults(fn=cmd_game_file)
+    tab = game.add_parser("tab", help="as abas da tela do jogo: de personagens, de assets e de gestão").add_subparsers(dest="action", required=True)
+    p = tab.add_parser("list", help="as abas do jogo e o que há em cada uma")
+    p.add_argument("game", help="id do jogo")
+    p.set_defaults(fn=cmd_game_tab_list)
+    p = tab.add_parser("new", help="cria uma aba")
+    p.add_argument("game", help="id do jogo")
+    p.add_argument("name")
+    p.add_argument("--kind", required=True, choices=games.TAB_KINDS, help="o que a aba guarda: personagens, assets (modelos 3D, texturas e sons) ou gestão (tarefas e documentos)")
+    p.set_defaults(fn=cmd_game_tab_new)
+    p = game.add_parser("doc", help="cria um documento em branco numa aba de gestão e diz onde ficou o arquivo")
+    p.add_argument("game", help="id do jogo")
+    p.add_argument("name")
+    p.add_argument("--tab", metavar="ABA", help="a aba de gestão (padrão: a primeira do jogo)")
+    p.set_defaults(fn=cmd_game_doc)
+    task = game.add_parser("task", help="o quadro de tarefas das abas de gestão").add_subparsers(dest="action", required=True)
+    p = task.add_parser("list", help="o quadro de agora: a fazer, fazendo e feito")
+    p.add_argument("game", help="id do jogo")
+    p.set_defaults(fn=cmd_game_task_list)
+    p = task.add_parser("add", help="cria uma tarefa")
+    p.add_argument("game", help="id do jogo")
+    p.add_argument("title")
+    p.add_argument("--notes", help="o detalhe da tarefa")
+    p.add_argument("--tab", metavar="ABA", help="a aba de gestão (padrão: a primeira do jogo)")
+    p.add_argument("--status", choices=games.TASK_STATES, default=games.TASK_STATES[0], help="a coluna em que ela entra (padrão: a_fazer)")
+    p.set_defaults(fn=cmd_game_task_add)
+    p = task.add_parser("move", help="passa uma tarefa para outra coluna")
+    p.add_argument("task", help="id da tarefa (ver `ponte game task list`)")
+    p.add_argument("status", choices=games.TASK_STATES)
+    p.set_defaults(fn=cmd_game_task_move)
+    p = task.add_parser("edit", help="muda o título, o detalhe ou a aba de uma tarefa")
+    p.add_argument("task", help="id da tarefa")
+    p.add_argument("--title")
+    p.add_argument("--notes")
+    p.add_argument("--tab", metavar="ABA")
+    p.set_defaults(fn=cmd_game_task_edit)
+    p = task.add_parser("delete", help="apaga uma tarefa")
+    p.add_argument("task", help="id da tarefa")
+    p.set_defaults(fn=cmd_game_task_delete)
     p = asset.add_parser("textures", help="acrescenta texturas a um asset e refaz o laudo")
     p.add_argument("id")
     p.add_argument("files", type=Path, nargs="+", help="arquivos ou pasta")

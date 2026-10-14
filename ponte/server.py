@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import secrets
+import shutil
 import time
 import zipfile
 from concurrent.futures import ThreadPoolExecutor
@@ -19,7 +20,7 @@ from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import ardy, blender, engines, jobs, kimodo, kimodo_cpp, meshy, pipeline, store, terminal
+from . import ardy, blender, engines, games, jobs, kimodo, kimodo_cpp, meshy, pipeline, store, terminal
 from .config import DATA, KIMODO_MAX_SAMPLES, WEB
 
 DATA.mkdir(parents=True, exist_ok=True)
@@ -94,12 +95,30 @@ def _with_files(kind: str, records: list[dict]) -> list[dict]:
     return records
 
 
+def _item_view(item: dict) -> dict:
+    """Uma textura, um som ou um documento, como a tela recebe.
+
+    O documento diz o tamanho e a hora em que foi gravado pela última vez, lidos do arquivo: é
+    assim que a tela mostra, sozinha, o que a IA do terminal acabou de escrever nele.
+    """
+    view = {**item, "files_base": f"/files/games/{item['game']}/{games.ITEMS}/{item['id']}"}
+    if item["kind"] == games.DOCUMENT:
+        try:
+            stat = games.item_path(item).stat()
+        except OSError:
+            return view
+        view.update(size_bytes=stat.st_size, modified=int(stat.st_mtime * 1000))
+    return view
+
+
 @app.get("/api/state")
 def state() -> dict:
     """Tudo que a interface mostra.
 
     Cada personagem é um projeto; animações e prévias ("results") dizem em ``asset_id`` de
-    qual. O personagem encerrado traz o resultado em ``final``.
+    qual. O personagem encerrado traz o resultado em ``final``. Os projetos dizem em ``game`` de
+    que jogo são, em ``role`` se são personagem ou modelo 3D (um asset do jogo) e, em ``tab``, em
+    que aba da tela do jogo estão.
     """
     assets = _with_files("asset", store.list_all("asset"))
     previews = _with_files("result", store.list_all("result"))
@@ -110,6 +129,11 @@ def state() -> dict:
             # O projeto mudou depois de encerrado: o resultado não acompanha sozinho.
             final["stale"] = final.get("signature") != pipeline.final_signature(asset, [p for p in previews if p["asset_id"] == asset["id"]])
     return {
+        # Os jogos, com as abas da tela de cada um, e as texturas, os sons e os documentos deles
+        # ("items"; os modelos 3D são projetos, em "assets"). "tasks" são as tarefas das abas de gestão.
+        "games": [{**game, "tabs": games.tabs(game), "files_base": f"/files/games/{game['id']}"} for game in games.list_games()],
+        "items": [_item_view(item) for item in games.list_items()],
+        "tasks": games.list_tasks(),
         "assets": assets,
         "motions": _with_files("motion", store.list_all("motion")),
         "results": previews,
@@ -147,17 +171,49 @@ def job_log(job_id: str) -> str:
 # --- Assets ---------------------------------------------------------------------------
 
 
+def _game(game_id: str) -> dict:
+    try:
+        return games.get(game_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+
+
+def _into_game(asset: dict, game: str | None, role: str | None, tab: str | None = None) -> dict:
+    """Põe o projeto recém-criado no jogo a que ele foi enviado, com o papel dito e na aba dita."""
+    if game or role:
+        asset = games.assign(asset["id"], game, role)
+    return games.place(asset["id"], tab) if tab else asset
+
+
+def _tab(game_id: str, tab: str) -> dict:
+    try:
+        return games.get_tab(game_id, tab)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+
+
 @app.post("/api/assets")
-async def upload_asset(request: Request, filename: str, name: str | None = None, defer: bool = False) -> dict:
+async def upload_asset(request: Request, filename: str, name: str | None = None, defer: bool = False, game: str | None = None, role: str | None = None, tab: str | None = None) -> dict:
     """Recebe o modelo (ou um .zip com modelo e texturas).
 
-    Com ``defer`` o laudo espera: o cliente ainda vai mandar as texturas.
+    Com ``defer`` o laudo espera: o cliente ainda vai mandar as texturas. ``game`` é o jogo em que
+    ele entra e ``role``, o que ele é lá: "personagem" (o padrão) ou "modelo", um asset. ``tab`` é
+    a aba do jogo em que ele fica; ela diz também o papel.
     """
+    if game:
+        _game(game)
+    if role and role not in games.ROLES:
+        raise HTTPException(400, f"Papel desconhecido: {role}.")
+    if tab:
+        if not game:
+            raise HTTPException(400, "A aba é de um jogo: diga o jogo.")
+        if _tab(game, tab)["kind"] == "gestao":
+            raise HTTPException(400, "Numa aba de gestão ficam tarefas e documentos, não personagens nem modelos.")
     if filename.lower().endswith(".zip"):
         tmp = DATA / "tmp" / f"{store.new_id(Path(filename).stem)}.zip"
         await _receive(request, tmp)
         try:
-            asset = pipeline.add_zip(tmp, name or Path(filename).stem)
+            asset = _into_game(pipeline.add_zip(tmp, name or Path(filename).stem), game, role, tab)
         except zipfile.BadZipFile as exc:
             raise HTTPException(400, "O arquivo .zip está corrompido ou não é um zip.") from exc
         except ValueError as exc:
@@ -167,7 +223,7 @@ async def upload_asset(request: Request, filename: str, name: str | None = None,
         job = submit("inspecao", f"Inspecionar {asset['name']}", {"asset_id": asset["id"]}, lambda log: {"asset_id": pipeline.inspect_asset(asset["id"], log)["id"]})
         return {"asset": asset, "job": job}
     try:
-        asset = pipeline.create_asset(filename, name)
+        asset = _into_game(pipeline.create_asset(filename, name), game, role, tab)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
     try:
@@ -197,6 +253,10 @@ async def upload_asset_file(request: Request, asset_id: str, path: str) -> dict:
         raise HTTPException(400, str(exc)) from exc
     await _receive(request, target)
     return {"path": path, "size_bytes": target.stat().st_size}
+
+
+class RenameBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
 
 
 class RigBody(BaseModel):
@@ -297,6 +357,264 @@ def put_mapping(asset_id: str, body: MappingBody) -> dict:
     asset = _check("asset", asset_id)
     override = body.model_dump(exclude_none=False)
     return submit("inspecao", f"Remapear {asset['name']}", {"asset_id": asset_id}, lambda log: {"asset_id": pipeline.set_mapping(asset_id, override, log)["id"]})
+
+
+# --- Jogos ----------------------------------------------------------------------------
+# Cada jogo junta os personagens e os assets dele (ponte/games.py). Estas rotas ficam antes de
+# "/api/{kind}/{item_id}", lá embaixo, que casaria com "/api/games/<id>" e "/api/items/<id>".
+
+
+class GameBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    # A pasta onde está o código do jogo (opcional): é o que a IA do terminal lê no guia.
+    code_path: str | None = Field(default=None, max_length=400)
+
+
+@app.post("/api/games")
+def create_game(body: GameBody) -> dict:
+    try:
+        return games.create(body.name, body.code_path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class GamePatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    code_path: str | None = Field(default=None, max_length=400)
+
+
+@app.patch("/api/games/{game_id}")
+def change_game(game_id: str, body: GamePatch) -> dict:
+    """Muda o nome do jogo ou a pasta do código dele (vazia: tira a que estava)."""
+    game = _game(game_id)
+    try:
+        if body.name is not None:
+            game = games.rename(game_id, body.name)
+        if "code_path" in body.model_fields_set:
+            game = games.set_code_path(game_id, body.code_path)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return game
+
+
+@app.delete("/api/games/{game_id}")
+def delete_game(game_id: str) -> dict:
+    """Apaga o jogo, com as texturas e os sons dele. Os personagens e os modelos 3D ficam, sem jogo."""
+    _game(game_id)
+    # Os terminais abertos na pasta do jogo a segurariam no disco: o dele e os das texturas e dos sons, que ficam dentro dela.
+    for item in games.list_items(game_id):
+        terminal.restart(item["id"])
+    terminal.restart(game_id)
+    games.delete(game_id)
+    for _ in range(10):  # o Windows demora um instante para soltar a pasta depois que o terminal fecha
+        if not games.folder(game_id).exists():
+            break
+        time.sleep(0.3)
+        games.delete(game_id)
+    return {"deleted": game_id}
+
+
+def _gone(folders: list[Path]) -> None:
+    """Insiste em apagar pastas que um terminal recém-fechado ainda segura: o Windows demora um instante para soltá-las."""
+    for _ in range(10):
+        left = [folder for folder in folders if folder.exists()]
+        if not left:
+            break
+        time.sleep(0.3)
+        for folder in left:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+@app.post("/api/games/{game_id}/items")
+async def upload_item(request: Request, game_id: str, filename: str, name: str | None = None, tab: str | None = None) -> dict:
+    """Recebe uma textura ou um som para os assets do jogo, ou um documento para uma aba de gestão."""
+    _game(game_id)
+    try:
+        record, target = games.new_item(game_id, filename, name, tab)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    try:
+        await _receive(request, target)
+    except Exception:
+        games.discard_item(record)
+        raise
+    return games.save_item(record)
+
+
+def _item(item_id: str) -> dict:
+    try:
+        return games.get_item(item_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+
+
+class ItemPatch(BaseModel):
+    """O que dá para mudar numa textura, num som ou num documento: o nome e a aba em que está."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    tab: str | None = Field(default=None, max_length=80)
+
+
+@app.patch("/api/items/{item_id}")
+def change_item(item_id: str, body: ItemPatch) -> dict:
+    item = _item(item_id)
+    try:
+        if body.name is not None:
+            item = games.rename_item(item_id, body.name)
+        if body.tab is not None:
+            item = games.place_item(item_id, body.tab)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    return item
+
+
+@app.delete("/api/items/{item_id}")
+def delete_item(item_id: str) -> dict:
+    _item(item_id)
+    folder = games.item_folder(item_id)
+    terminal.restart(item_id)  # o terminal aberto na pasta do asset seguraria ela no disco
+    games.delete_item(item_id)
+    _gone([folder])
+    return {"deleted": item_id}
+
+
+# As abas da tela do jogo: duas vêm com ele (Characters e Assets) e as outras o dono cria, de
+# personagens, de assets ou de gestão (tarefas e documentos).
+
+
+class TabBody(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    kind: str
+
+
+@app.post("/api/games/{game_id}/tabs")
+def create_tab(game_id: str, body: TabBody) -> dict:
+    _game(game_id)
+    try:
+        return games.add_tab(game_id, body.name, body.kind)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class TabPatch(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+
+
+@app.patch("/api/games/{game_id}/tabs/{tab_id}")
+def rename_tab(game_id: str, tab_id: str, body: TabPatch) -> dict:
+    _game(game_id)
+    _tab(game_id, tab_id)
+    try:
+        return games.rename_tab(game_id, tab_id, body.name)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/games/{game_id}/tabs/{tab_id}")
+def delete_tab(game_id: str, tab_id: str) -> dict:
+    """Apaga uma aba criada pelo dono.
+
+    Os personagens e os assets que estavam nela voltam para a aba que vem com o jogo. De uma aba
+    de gestão, as tarefas e os documentos saem do disco.
+    """
+    _game(game_id)
+    tab = _tab(game_id, tab_id)
+    folders = []
+    if tab["kind"] == "gestao":
+        for document in games.documents(game_id, tab["id"]):
+            folders.append(games.item_folder(document["id"]))
+            terminal.restart(document["id"])  # o terminal aberto na pasta do documento seguraria ela no disco
+    try:
+        games.delete_tab(game_id, tab["id"])
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    _gone(folders)
+    return {"deleted": tab["id"]}
+
+
+# Numa aba de gestão: os documentos (arquivos de texto, guardados como as texturas e os sons) e o
+# quadro de tarefas.
+
+
+class DocumentBody(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    tab: str | None = Field(default=None, max_length=80)
+
+
+@app.post("/api/games/{game_id}/documents")
+def create_document(game_id: str, body: DocumentBody) -> dict:
+    """Cria um documento em branco numa aba de gestão (sem aba dita, na primeira do jogo)."""
+    _game(game_id)
+    try:
+        return _item_view(games.new_document(game_id, body.name, body.tab))
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class TextBody(BaseModel):
+    text: str = Field(max_length=2_000_000)
+
+
+@app.put("/api/items/{item_id}/text")
+def write_document(item_id: str, body: TextBody) -> dict:
+    """Grava o texto de um documento: o que o dono escreveu na tela."""
+    _item(item_id)
+    try:
+        return _item_view(games.write_document(item_id, body.text))
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class TaskBody(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    tab: str | None = Field(default=None, max_length=80)
+    notes: str = Field(default="", max_length=4000)
+    status: str = games.TASK_STATES[0]
+
+
+@app.post("/api/games/{game_id}/tasks")
+def create_task(game_id: str, body: TaskBody) -> dict:
+    _game(game_id)
+    try:
+        return games.add_task(game_id, body.title, body.tab, body.notes, body.status)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+class TaskPatch(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    status: str | None = None
+    notes: str | None = Field(default=None, max_length=4000)
+    tab: str | None = Field(default=None, max_length=80)
+
+
+@app.patch("/api/tasks/{task_id}")
+def change_task(task_id: str, body: TaskPatch) -> dict:
+    """Muda o título, a nota, a coluna (a_fazer, fazendo, feito) ou a aba de uma tarefa."""
+    try:
+        return games.update_task(task_id, title=body.title, status=body.status, notes=body.notes, tab=body.tab)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(task_id: str) -> dict:
+    try:
+        games.get_task(task_id)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
+    games.delete_task(task_id)
+    return {"deleted": task_id}
 
 
 # --- Animações ------------------------------------------------------------------------
@@ -588,18 +906,33 @@ def set_unreal(asset_id: str, body: UnrealBody) -> dict:
     return pipeline.set_unreal(asset_id, body.enabled)
 
 
-class RenameBody(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
+class AssetPatch(BaseModel):
+    """O que dá para mudar num projeto: o nome, o jogo em que ele está, o que ele é lá e em que aba fica."""
+
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    game: str | None = None  # nulo, se vier dito, deixa o projeto sem jogo
+    role: str | None = None  # "personagem" ou "modelo" (um asset do jogo)
+    tab: str | None = Field(default=None, max_length=80)  # a aba do jogo; ela diz também o papel
 
 
 @app.patch("/api/assets/{asset_id}")
-def rename_asset(asset_id: str, body: RenameBody) -> dict:
-    """Muda o nome do projeto."""
-    _check("asset", asset_id)
+def change_asset(asset_id: str, body: AssetPatch) -> dict:
+    """Muda o nome do projeto, o jogo em que ele está, o papel dele (personagem ou modelo) ou a aba."""
+    asset = _check("asset", asset_id)
     try:
-        return pipeline.rename_asset(asset_id, body.name)
+        if body.name is not None:
+            asset = pipeline.rename_asset(asset_id, body.name)
+        if "game" in body.model_fields_set:
+            asset = games.assign(asset_id, body.game, body.role)
+        elif body.role is not None and body.tab is None:
+            asset = games.set_role(asset_id, body.role)
+        if body.tab is not None:
+            asset = games.place(asset_id, body.tab)
+    except KeyError as exc:
+        raise HTTPException(404, str(exc.args[0])) from exc
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+    return asset
 
 
 @app.delete("/api/{kind}/{item_id}")
@@ -768,11 +1101,14 @@ def meshy_delete(request_id: str) -> dict:
     return {"deleted": request_id}
 
 
-# --- Terminal do projeto --------------------------------------------------------------------
-# Um terminal por projeto, já na pasta dele e parado no prompt: a IA é chamada por quem está na
-# tela (ponte/terminal.py).
+# --- Terminal da tela -----------------------------------------------------------------------
+# Um terminal por espaço, já na pasta dele e parado no prompt: a IA é chamada por quem está na
+# tela (ponte/terminal.py). O nome na rota é o id do jogo, do projeto (personagem ou modelo 3D) ou
+# da textura ou do som em que se está; o da tela de entrada usa as mesmas rotas, com
+# `terminal.HOME`, e abre na pasta da ponte.
 # A página fala com ele por WebSocket: {"type": "input", "data"} e {"type": "resize", "cols", "rows"}
-# na ida; {"type": "output", "data"}, {"type": "exit"} e {"type": "error", "message"} na volta.
+# na ida; {"type": "output", "data"}, {"type": "exit"} e {"type": "error", "message"} na volta. A
+# primeira mensagem é o que já estava escrito ("replay"), com "answered" dizendo se outra tela já o leu.
 
 
 @app.get("/api/terminal")
@@ -783,7 +1119,8 @@ def terminal_info() -> dict:
 
 @app.post("/api/terminal/{asset_id}/restart")
 def terminal_restart(asset_id: str) -> dict:
-    _check("asset", asset_id)
+    if not terminal.known(asset_id):
+        raise HTTPException(404, f"Não há terminal para {asset_id}.")
     terminal.restart(asset_id)
     return {"restarted": asset_id}
 
@@ -801,10 +1138,8 @@ async def terminal_socket(ws: WebSocket, asset_id: str, token: str = "") -> None
         return
     await ws.accept()
     trouble = terminal.problem()
-    try:
-        store.get("asset", asset_id)
-    except (KeyError, ValueError):
-        trouble = "Este projeto não existe mais."
+    if not terminal.known(asset_id):
+        trouble = "O que estava aberto aqui não existe mais."
     if trouble:
         await ws.send_text(json.dumps({"type": "error", "message": trouble}))
         await ws.close()
@@ -816,7 +1151,9 @@ async def terminal_socket(ws: WebSocket, asset_id: str, token: str = "") -> None
         await ws.close()
         return
     queue: asyncio.Queue = asyncio.Queue()
-    await ws.send_text(json.dumps({"type": "output", "data": session.attach(asyncio.get_running_loop(), queue), "replay": True}))
+    backlog, answered = session.attach(asyncio.get_running_loop(), queue)
+    # "answered": outra tela já respondeu às perguntas que estão nesse texto; esta não deve responder de novo.
+    await ws.send_text(json.dumps({"type": "output", "data": backlog, "replay": True, "answered": answered}))
 
     async def forward() -> None:
         while True:

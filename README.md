@@ -4,42 +4,58 @@
 
 # PonteAnimada
 
-Ferramenta local, para Windows, para dar animações a um personagem 3D e assistir a cada uma no
-navegador. Cada personagem é um projeto, e a tela do projeto tem três coisas:
+Ferramenta local, para Windows, para cuidar do que entra num jogo: os personagens 3D, com as
+animações de cada um, e os assets (modelos, texturas e sons). Cada projeto é um **jogo**, e a
+tela dele é dividida em **abas**: duas vêm com o jogo e as outras você cria. Nelas ficam:
 
-- um **visor 3D** com o personagem texturizado, parado ou animado;
-- a **lista de animações** dele;
-- um **terminal** aberto na pasta do projeto, onde você chama a IA que quiser (o Claude Code ou
-  outra) e pede a animação em português.
+- os **Characters**: cada personagem abre num **visor 3D**, texturizado, parado ou animado, com
+  a **lista de animações** dele ao lado;
+- os **Assets**: o que não é personagem, cada um aberto no mesmo lugar (o modelo no visor, a
+  textura como imagem, o som num tocador);
+- a **gestão** do jogo, numa aba que você cria: um **quadro de tarefas** (a fazer, fazendo,
+  feito) e os **documentos** do jogo (ideias, regras, roteiro);
+- um **terminal** sempre à direita, aberto na pasta de onde você está (o jogo, o personagem ou
+  o asset), onde você chama a IA que quiser (o Claude Code ou outra) e pede a animação, o asset
+  ou a jogabilidade em português. Ela já entra sabendo no que vai mexer.
 
-A IA trabalha no **Blender**, que roda escondido, e põe o resultado na lista. Você assiste no
-visor ao lado e diz o que achou. É essa a **ponte**: entre você, a IA e o Blender.
+A IA trabalha no **Blender**, que roda escondido, e põe o resultado na tela. Você assiste ao
+lado e diz o que achou. É essa a **ponte**: entre você, a IA e o Blender.
 
 As animações também vêm prontas do Mixamo (por um botão), de um gerador por texto (o
 [Kimodo](https://github.com/nv-tlabs/kimodo), da NVIDIA) ou de captura de movimento. O Blender
 as aplica no personagem, seja qual for o esqueleto dele.
 
-> *In English:* a local Windows tool (interface in Portuguese) to animate a 3D character and
-> review every clip in the browser. Each character is a project with a 3D viewport, its
-> animation list and a terminal opened in the project folder, where you call the AI assistant
-> of your choice (Claude Code or another) to build animations in a headless Blender. Motion can
-> also come from Mixamo FBX, text-to-motion (Kimodo) or BVH mocap; Blender inspects, rigs and
-> retargets.
+> *In English:* a local Windows tool (interface in Portuguese) to manage what goes into a game:
+> 3D characters with their animations, and assets (models, textures, sounds). Each project is a
+> game, with its characters and its assets; the game, each character and each asset has its own
+> terminal, opened in its own folder, where you call the AI assistant of your choice (Claude Code or another) to build animations in a headless
+> Blender and review every clip in a 3D viewport. Motion can also come from Mixamo FBX,
+> text-to-motion (Kimodo) or BVH mocap; Blender inspects, rigs and retargets.
 
-![A tela de um projeto: o boneco de teste andando no visor, a lista de animações e o terminal na pasta do projeto](docs/img/tela-projeto.png)
+![A tela de um personagem: o boneco de teste andando no visor, a lista de animações e o terminal](docs/img/tela-projeto.png)
 
-*A tela de um projeto: a caminhada de exemplo no boneco de teste, a lista de animações e o
-terminal, parado na pasta do projeto.*
+*A tela de um personagem: a caminhada de exemplo no boneco de teste, a lista de animações e o
+terminal. (A imagem é de antes dos jogos: hoje a barra de cima volta para o jogo.)*
 
 ## O que ele faz
 
 - **Mostra o personagem e as animações.** Visor 3D no navegador, com a textura: vistas de
   frente, lado, trás e cima, tocar e pausar, barra de tempo, velocidade, esqueleto à mostra.
-- **Abre um terminal na pasta de cada projeto.** É um PowerShell de verdade, dentro da tela, e
-  vem parado: você chama ali a IA que preferir. A pasta tem um guia (`CLAUDE.md` e `AGENTS.md`)
-  que diz a ela onde está, como rodar o Blender escondido e como pôr a animação na tela.
+- **Junta tudo por jogo.** Cada jogo tem os personagens dele (*Characters*) e os *Assets*:
+  modelos 3D que não são personagem (arma, objeto, cenário), texturas e sons.
+- **Deixa você organizar o jogo em abas.** Além das duas que vêm com ele, você cria as suas, de
+  personagens, de assets ou de gestão. Numa aba de gestão ficam um quadro de tarefas e os
+  documentos do jogo, que a IA do terminal também lê e escreve.
+- **Abre um terminal na pasta de cada espaço**: o jogo, cada personagem e cada asset têm o
+  deles. É um PowerShell de verdade, dentro da tela, e vem parado: você chama ali a IA que
+  preferir. A pasta tem um guia (`CLAUDE.md` e `AGENTS.md`) que diz a ela onde está e no que vai
+  mexer (o jogo, aquele personagem ou aquele asset), onde está o código do jogo, como rodar o
+  Blender escondido e como pôr o trabalho na tela.
 - **Recebe animação feita no Blender.** Um GLB com o personagem já animado entra na lista com
   um comando (`ponte anim add`), e a tela o mostra em seguida.
+- **Simula o jogo.** Você anda com o personagem pelo teclado ou clicando no chão, e as
+  animações trocam sozinhas entre parado, andando e correndo. Mostra o que uma animação
+  sozinha não mostra: a troca de uma para a outra e o pé deslizando.
 - **Aproveita animação pronta**: FBX do Mixamo, por um botão, e captura de movimento em BVH.
 - **Aplica a animação no personagem** (retarget), seja qual for o esqueleto dele. Reconhece os
   nomes de osso mais comuns: Mixamo, Unreal, Unity, Blender, VRM e Biped.
@@ -91,9 +107,10 @@ Projeto pessoal, em uso, feito para levar personagens animados a um jogo na Godo
 antes de instalar:
 
 - **A tela é nova.** Foi refeita em 11/10/2026 para ficar só com o visor, as animações e o
-  terminal. É a primeira versão. A tela anterior, mais completa (laudo, rig, roteiro, revisão,
-  ajuste de pose, acessórios, encerrar), continua inteira em `/antiga/`: veja
-  [A tela anterior](#a-tela-anterior).
+  terminal, e em 13/10/2026 ganhou os jogos: cada projeto passou a ser um jogo, com os
+  personagens e os assets dentro. É a primeira versão das duas coisas. A tela anterior, mais
+  completa (laudo, rig, roteiro, revisão, ajuste de pose, acessórios, encerrar), continua
+  inteira em `/antiga/`, sem saber de jogos: veja [A tela anterior](#a-tela-anterior).
 - **Windows.** Feito e usado no Windows 11. O terminal da tela, os atalhos, os scripts de abrir
   e parar e a ligação com o Kimodo (que roda no WSL) dependem dele. Em outro sistema não foi
   testado.
@@ -148,6 +165,8 @@ animação na tela sem instalar gerador nem IA (é a imagem do alto desta págin
 uv run ponte fixture        # cria o projeto "Boneco de teste" e mostra o id dele
 uv run ponte motion import <projeto> tests\fixtures\kimodo_walk_forward.bvh --label "Andar"
 uv run ponte retarget <projeto> <animacao>      # o id da animação sai no comando anterior
+uv run ponte game new "Meu jogo"                # cria um jogo e mostra o id dele
+uv run ponte game add <jogo> <projeto>          # põe o boneco no jogo
 uv run ponte serve
 ```
 
@@ -165,6 +184,7 @@ ou aplicada). Se mover a pasta do projeto, rode `scripts\criar-atalho.ps1` para 
 - [A tela](#a-tela)
 - [O terminal e a IA](#o-terminal-e-a-ia)
 - [Animação feita no Blender](#animação-feita-no-blender)
+- [O simulador](#o-simulador)
 - [Animações do Mixamo](#animações-do-mixamo)
 - [Personagem pelo Meshy](#personagem-pelo-meshy)
 - [Capturas de movimento (BVH)](#capturas-de-movimento-bvh)
@@ -192,46 +212,112 @@ ou aplicada). Se mover a pasta do projeto, rode `scripts\criar-atalho.ps1` para 
 
 ## A tela
 
-A tela foi refeita em 11/10/2026 para ficar só com o que é usado. É a primeira versão.
+A tela foi refeita em 11/10/2026 para ficar só com o que é usado, e em 13/10/2026 ganhou os
+jogos. É a primeira versão. O caminho é **Projetos > o jogo > um personagem ou um asset**, com o
+terminal sempre à direita.
 
-**Entrada.** Um cartão por projeto (cada personagem é um projeto), o cartão *Novo personagem*,
-os pedidos ao Meshy e o que estiver rodando. O **×** no canto do cartão exclui o projeto, com
-confirmação. Arrastar um modelo para a janela (FBX, GLB, BLEND, OBJ ou um ZIP com as texturas)
-cria um projeto.
+**Entrada (Projetos).** Um cartão por jogo e o cartão *Novo jogo*. O **×** no canto do cartão
+exclui o jogo, com confirmação: as texturas e os sons dele saem do disco (e as tarefas e os
+documentos da gestão), mas os personagens e os modelos 3D não, ficam **sem jogo**. É nessa lista, logo abaixo, que aparece todo projeto que
+ainda não está em nenhum jogo (o que o Meshy acabou de criar, o que veio de antes dos jogos),
+com a escolha do jogo embaixo do cartão. Ali ficam também os pedidos ao Meshy e o que estiver
+rodando. À direita, um **terminal na pasta da ponte**: é onde se chama a IA para o que não é de
+um jogo só.
 
-**Projeto.** Três partes:
+**Jogo.** Uma barra de abas, o que há na aba escolhida e o terminal do jogo. Duas abas vêm com
+o jogo:
+
+- **Characters**: um cartão por personagem, com quantas animações ele tem, e *Novo personagem*
+  (FBX, GLB, BLEND, OBJ ou um ZIP com as texturas).
+- **Assets**: os modelos 3D que não são personagem, as texturas (PNG, JPG, WEBP, BMP, GIF, TGA,
+  TIFF, EXR, HDR, DDS, PSD) e os sons (WAV, OGG, MP3, FLAC), e *Novo asset*.
+
+**+ Nova aba** cria as outras: você dá o nome e escolhe o tipo, **personagens**, **assets** ou
+**gestão** (o tipo não muda depois). Serve para separar o jogo do seu jeito: uma aba só de
+zumbis, outra do cenário, outra de planejamento. Dois cliques no nome de uma aba (ou *mudar o
+nome*, logo abaixo) mudam o nome; *apagar a aba* só existe nas que você criou. Apagar uma aba de
+personagens ou de assets não apaga o que está nela: volta para a aba que vem com o jogo. Apagar
+uma de gestão leva as tarefas e os documentos dela.
+
+No cartão, o **×** apaga e o **⇄** passa o personagem ou o asset para outra aba (o arquivo e as
+animações ficam como estão). A aba de destino diz o que ele é: numa de personagens, personagem;
+numa de assets, modelo. Com mais de um destino, o **⇄** abre a lista das abas. Arrastando
+arquivos para a janela, ela se divide em dois lados, *personagem* e *asset*: o lado em que você
+solta diz o que o arquivo é, e ele entra na aba aberta, se for desse tipo. Uma imagem solta
+junto com um modelo é textura dele; sozinha, é um asset. Na barra de cima, um clique no nome do
+jogo muda o nome, e ao lado fica a **pasta do código do jogo** (o projeto na Godot, por
+exemplo): é opcional, e serve para a IA do terminal saber onde fazer a jogabilidade.
+
+**Aba de gestão.** Duas partes:
+
+- **Tarefas**: um quadro com três colunas, *A fazer*, *Fazendo* e *Feito*. Escreva no campo do
+  alto e aperte Enter para criar. O cartão muda de coluna pelas setas dele ou arrastado; um
+  clique abre a tarefa, para mudar o título, o detalhe e a coluna, ou apagar. O número ao lado
+  do nome da aba é o que ainda não está feito.
+- **Documentos**: textos do jogo (ideias, regras, roteiro de missão), um arquivo Markdown cada.
+  *Novo documento* cria um em branco; um `.md` ou `.txt` arrastado para a janela também entra.
+  Aberto, o documento aparece formatado, com o terminal dele ao lado; **Editar** troca a página
+  pelo texto, para você escrever (Ctrl+S salva), e uma caixa de marcar (`- [ ]`) se marca com
+  um clique.
+
+A IA chamada no terminal lê e atualiza os dois: as tarefas pela linha de comando
+(`ponte game task ...`) e os documentos gravando o arquivo. O que ela muda aparece na tela em 2
+segundos, sem recarregar.
+
+**Asset aberto.** O modelo vai para o visor; a textura aparece como imagem, sobre um xadrez que
+mostra onde ela é transparente (as que o navegador não mostra, como TGA e EXR, ficam guardadas
+e têm o link para baixar); o som, num tocador. À direita, o que ele é: arquivo, tamanho, e as
+dimensões ou a duração.
+
+**Personagem.** Três partes:
 
 - **Visor 3D**, à esquerda: o personagem com a textura, parado ou tocando a animação escolhida.
   Botões de vista (*Frente*, *Lado*, *Trás*, *Cima*), tocar e pausar (ou Espaço), barra de
   tempo, velocidade, e as opções *Seguir* (a câmera acompanha o personagem), *Parado* (tira o
   deslocamento, só para ver), *Ossos* e *Malha*. O mouse gira, aproxima e arrasta a vista.
   Trocar de animação não mexe na câmera, para comparar do mesmo ângulo.
-- **Animações**, à direita: *Modelo parado* e uma linha por animação, com a duração e de onde
-  veio (Mixamo, Blender, captura, importada ou gerada). Clique para ver; dois cliques mudam o
-  nome; o **×** apaga. Animação que chega com a tela aberta abre sozinha no visor. O botão
-  **+ Mixamo (.fbx)** importa as baixadas do Mixamo
-  ([Animações do Mixamo](#animações-do-mixamo)).
-- **Terminal**, embaixo da lista: um PowerShell de verdade, já na pasta do projeto.
+- **Animações**, à direita: *Modelo parado* e uma linha por animação, em ordem pelo nome, com a
+  duração e de onde veio (Mixamo, Blender, captura, importada ou gerada). Clique para ver; dois
+  cliques mudam o nome; o **×** apaga. O **✓** aprova a animação e a põe numa pasta, com o nome
+  que você der (o modo do jogo, por exemplo): a pasta abre e fecha num clique, dois cliques mudam
+  o nome dela e o **↩** tira a animação de lá. O que não foi aprovado fica fora das pastas.
+  Animação que chega com a tela aberta abre sozinha no visor. O botão **+ Mixamo (.fbx)** importa
+  as baixadas do Mixamo ([Animações do Mixamo](#animações-do-mixamo)), e **Simular** abre o
+  [simulador](#o-simulador).
+- **Terminal**, embaixo da lista: o do personagem, aberto na pasta dele. O do jogo fica na tela
+  do jogo, esperando a volta. Num asset aberto é igual: o terminal é o daquele asset.
 
-A divisória entre o visor e o lado direito arrasta. O endereço guarda o projeto e a animação
-abertos (`#p/<projeto>/<animação>`): recarregar a página volta ao mesmo lugar.
+A divisória entre as duas metades arrasta. O endereço guarda onde se está (`#g/<jogo>/<aba>`,
+`#p/<projeto>/<animação>`, `#i/<textura, som ou documento>`): recarregar a página volta ao mesmo
+lugar.
 
 ### O terminal e a IA
 
 O terminal **vem parado**: ele não chama nada sozinho. Você digita o comando da IA que quiser
 usar (`claude`, por exemplo) e conversa com ela ali, olhando o visor.
 
-- **O guia da pasta.** Ao abrir o terminal, a ponte grava na pasta do projeto um guia com dois
-  nomes, `CLAUDE.md` (o que o Claude Code lê) e `AGENTS.md` (o que o Codex, o opencode e outras
-  leem), com o mesmo texto: quem está escrevendo, onde está o personagem, como rodar o Blender
-  sem janela e como pôr a animação na tela. Cada um é regravado a cada abertura enquanto
-  começar pela linha de marca: apague essa linha e a ponte não toca mais naquele arquivo. O que
-  for só daquele personagem vai num `NOTAS.md` escrito à mão na mesma pasta. A ponte nunca o
-  grava, e o guia passa a apontar para ele.
+- **Um terminal por espaço.** O painel é um só e mostra o de onde você está; o cabeçalho diz
+  qual. Na tela do jogo é o do jogo, aberto na pasta dele dentro da ponte (`data/games/<jogo>/`,
+  e não na pasta do código). Dentro de um personagem ou de um modelo 3D é o dele
+  (`data/projects/<id>/`); dentro de uma textura, de um som ou de um documento, o dele
+  (`data/games/<jogo>/assets/<id>/`). São terminais separados, cada um com a conversa dele: a IA
+  chamada num asset trabalha naquele asset; a do jogo, no jogo inteiro e na jogabilidade. Trocar
+  de aba na tela do jogo não troca de terminal: em todas é o do jogo, e é ele que cuida do
+  quadro de tarefas.
+- **O guia da pasta.** Ao abrir o terminal, a ponte grava na pasta um guia com dois nomes,
+  `CLAUDE.md` (o que o Claude Code lê) e `AGENTS.md` (o que o Codex, o opencode e outras leem),
+  com o mesmo texto. O do jogo diz quem está escrevendo, que jogo é, onde está o código dele, os
+  personagens e os modelos com a pasta de cada um, como rodar o Blender sem janela e como pôr o
+  trabalho na tela. O de um personagem ou de um asset diz que é nele que a IA vai mexer, de que
+  jogo é e como mostrar o resultado (a animação, o modelo mudado, o arquivo novo). Cada um é
+  regravado a cada vez que a tela se liga ao terminal, enquanto começar pela linha de marca:
+  apague essa linha e a ponte não toca mais naquele arquivo. O que for só de um personagem vai
+  num `NOTAS.md` escrito à mão na pasta dele (`data/projects/<id>/`). A ponte nunca o grava, e o
+  guia aponta para ele.
 - **O Blender roda escondido**, comandado pela IA. Você não abre o Blender: o que você vê é o
   visor.
 - **O terminal não fica para trás à toa.** Se ninguém escreveu nele, fecha sozinho 20 segundos
-  depois de você sair do projeto. Com algo escrito, ele espera a sua volta: trocar de projeto,
+  depois de você sair dali. Com algo escrito, ele espera a sua volta: ir para outra tela,
   recarregar ou fechar a janela só solta a tela, e ao voltar o que estava escrito reaparece.
   Ele só fecha depois de 3 horas calado sem ninguém olhando, quando você clica em *reiniciar*
   ou quando o servidor para.
@@ -255,6 +341,40 @@ serve também para o que você mesmo fizer no Blender:
 Ela entra na lista em até 2 segundos, e abre sozinha se o projeto estiver na tela. `--replace`
 troca a de mesmo nome; `--blend <arquivo>` guarda junto o arquivo do Blender de onde ela saiu.
 O GLB é mostrado como veio: nada nele é conferido nem corrigido.
+
+### O simulador
+
+O botão **Simular**, no alto da lista de animações, abre o personagem num chão quadriculado
+para testar as animações **como num jogo**: você anda com ele e elas trocam sozinhas.
+
+- **Comandos**: `W` `A` `S` `D` ou as setas andam, `Shift` corre, um clique no chão manda o
+  personagem até o ponto (como num jogo de estratégia), arrastar o mouse gira a câmera, a
+  rodinha aproxima, `C` troca entre a câmera de perto e a de cima, `R` volta ao centro.
+- **Qual animação toca em cada momento**: parado, andando e correndo, e também começar e parar
+  de andar, virar para um lado e dar meia-volta (andando, parado ou correndo). O simulador
+  escolhe pelo nome: `idle` ou parado, `walk` ou andar, `run` ou correr, e para os outros
+  momentos os nomes de jogo (`idle_to_walk`, `walk_to_idle`, `turn_left`, `turn_right`,
+  `turn_around`, `turn_left_idle`, `run_turn_left`...). O nome exato ganha de um parecido, e
+  nomes com espaço, como os do Mixamo (`walk forward`), valem como se fossem com sublinhado. Você
+  troca em cada lista. Sem animação de virar, ele vira de uma vez e anda para onde aponta. As
+  outras animações do projeto ficam em **Tocar uma vez**, nas teclas de número.
+- **Dois conjuntos**: *patrulha* usa os nomes do jogo e *alerta*, os mesmos nomes terminados em
+  `_aiming` (a arma no ombro). O seletor **Conjunto** troca, e a tecla `Q` alterna no meio do
+  jogo.
+- **O passo da animação**: ele mede a que velocidade cada animação anda, pelo deslocamento
+  dela ou, se foi feita parada no lugar, pelo que a ponta do pé faz enquanto está no chão. O
+  personagem começa andando nessa velocidade, que é a que não deixa o pé deslizar.
+- **Pé deslizando**: mude a velocidade (para a do seu jogo, por exemplo) e o quadro do canto
+  diz quanto o pé desliza, em centímetros por segundo. Com *Acelerar ou frear a animação*
+  ligado, a animação toca mais rápida ou mais lenta para o passo acompanhar, como muitos jogos
+  fazem, e o quadro mostra em quanto.
+- **A troca**: o tempo de passar de uma animação para a outra e a rapidez com que o personagem
+  vira também se ajustam ali.
+
+O simulador não muda nada no projeto: os ajustes ficam guardados no navegador, por
+personagem. As velocidades valem para o tamanho que o personagem tem no arquivo. Uma animação
+com deslocamento toca parada no lugar (sai o deslocamento em linha reta), porque quem leva o
+personagem é o simulador, como o código de um jogo faria.
 
 ## Animações do Mixamo
 
@@ -361,12 +481,27 @@ Animações aplicadas antes de as texturas chegarem não mudam sozinhas: refaça
 aparece na interface, e ela funciona mesmo com o servidor fora do ar. Rigar, ajustar a pose e
 posicionar acessórios são só pela tela anterior.
 
-`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`).
+`<projeto>` é o id do projeto, que é o do personagem (aparece em `ponte status`); `<jogo>`, o
+do jogo (`ponte game list`).
 
 ```powershell
 uv run ponte serve                       # a interface, em http://127.0.0.1:8765 (rotas da API em /api/docs)
-uv run ponte status                      # projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
-uv run ponte asset add personagem.fbx    # cria o projeto e faz o laudo
+uv run ponte status                      # jogos, projetos, fila, o que foi aprovado/reprovado (com as notas) e o que já foi encerrado
+uv run ponte game new "Meu jogo" [--path <pasta do código>]   # cria um jogo
+uv run ponte game list                   # os jogos, e os projetos que não estão em nenhum
+uv run ponte game show <jogo>            # o que há no jogo: personagens e assets, com a pasta de cada um
+uv run ponte game add <jogo> <projeto> [--role modelo] [--tab <aba>]   # põe no jogo um projeto que já existe (com --role modelo, entre os assets; com --tab, numa aba)
+uv run ponte game file <jogo> madeira.png passo.wav [--tab <aba>]   # textura ou som: entra nos assets do jogo; um .md ou .txt vira documento de uma aba de gestão
+uv run ponte game path <jogo> <pasta>    # diz onde está o código do jogo
+uv run ponte game tab list <jogo>        # as abas do jogo e o que há em cada uma
+uv run ponte game tab new <jogo> "Zumbis" --kind personagens   # cria uma aba: personagens, assets ou gestao
+uv run ponte game task list <jogo>       # o quadro de tarefas: a fazer, fazendo e feito, com o id de cada uma
+uv run ponte game task add <jogo> "Fazer o portão" [--notes "..."] [--tab <aba>]   # cria uma tarefa
+uv run ponte game task move <tarefa> a_fazer|fazendo|feito   # passa a tarefa para outra coluna
+uv run ponte game task edit <tarefa> [--title "..."] [--notes "..."]   # corrige a tarefa (delete <tarefa> apaga)
+uv run ponte game doc <jogo> "Regras do jogo" [--tab <aba>]   # cria um documento em branco e diz onde ficou o arquivo
+uv run ponte asset add caixote.glb --game <jogo> --role modelo   # um modelo 3D que não é personagem
+uv run ponte asset add personagem.fbx [--game <jogo>]   # cria o projeto e faz o laudo
 uv run ponte asset add personagem.fbx --textures pasta_das_texturas
 uv run ponte asset textures <projeto> cor.png normal.png   # acrescenta texturas e refaz o laudo
 uv run ponte asset show <projeto>        # laudo e mapeamento de ossos
@@ -401,7 +536,7 @@ uv run ponte fixture                     # recria o boneco de teste
 
 A tela de antes de 11/10/2026 continua inteira em <http://127.0.0.1:8765/antiga/>, sem link
 na tela nova. É nela que ficam o laudo, o rig, o roteiro passo a passo, a revisão (aprovar e
-reprovar), o ajuste de pose, os acessórios, o encerramento e a escolha do gerador. As duas
+reprovar), o ajuste de pose, os acessórios e o encerramento. As duas
 telas leem o mesmo acervo. As seções seguintes, de
 [Fluxo na tela anterior](#fluxo-na-tela-anterior) até [Unreal 5](#unreal-5), descrevem essa
 tela.
@@ -600,9 +735,11 @@ repositório é o da máquina do autor: o Kimodo original e o ARDY estão deslig
 pasta, a ponte o dá como não instalado. Enquanto nenhum estiver instalado, a ponte não gera;
 importar, ver, validar e encerrar continuam funcionando.
 
-A tela nova só mostra, na barra de cima, qual gerador está em uso. Quem gera é a IA do
-terminal ou você, pela linha de comando (`uv run ponte gen ...`); a tela de roteiro, com os
-campos de cada passo, é a da tela anterior.
+Ao abrir, a tela pergunta qual gerador você vai usar: os três aparecem sempre, e o que não está
+instalado fica apagado, com o motivo. Escolher não liga nada: o gerador só sobe quando uma
+geração é pedida. A barra de cima mostra o que está em uso, e um clique ali reabre a escolha.
+Quem gera é a IA do terminal ou você, pela linha de comando (`uv run ponte gen ...`); a tela
+de roteiro, com os campos de cada passo, é a da tela anterior.
 
 - **Kimodo original**: siga [`docs/kimodo-setup/GUIA-KIMODO.md`](docs/kimodo-setup/GUIA-KIMODO.md)
   (o registro de como ele foi instalado aqui, com os scripts ao lado) e ponha
@@ -632,8 +769,8 @@ libera (na tela anterior, o botão **Desligar**, no topo).
 
 Os dois rodam o mesmo modelo, no mesmo esqueleto, e a fila é uma só (um pedido de cada vez,
 somando os dois). Para ver qual está em uso e trocar: `uv run ponte engine` e
-`uv run ponte engine kimodo|cpp`. A tela anterior pergunta qual usar ao abrir e tem o
-*trocar gerador* na barra de cima.
+`uv run ponte engine kimodo|cpp`. As duas telas, a nova e a anterior, perguntam qual usar ao
+abrir, e a barra de cima reabre a escolha.
 
 | | Kimodo original | kimodo.cpp |
 |---|---|---|
@@ -650,8 +787,7 @@ clipe gerado num não pode ser continuado no outro.
 ### ARDY
 
 O [ARDY](https://github.com/nv-tlabs/ardy) é outro gerador da NVIDIA, irmão do Kimodo, em tempo
-real. Na ponte ele é o terceiro gerador (`ponte engine ardy`, ou a escolha ao abrir a tela
-anterior). Os scripts usados para instalá-lo no Ubuntu do WSL estão em `docs/ardy-setup/`;
+real. Na ponte ele é o terceiro gerador (`ponte engine ardy`, ou a escolha ao abrir a tela). Os scripts usados para instalá-lo no Ubuntu do WSL estão em `docs/ardy-setup/`;
 depois, ponha `installed = true` em `[ardy]`, no `ponte.toml`. Na máquina do autor ele esteve
 instalado de 08 a 10/10/2026 e foi desinstalado; o que deu certo e o que deu errado com ele
 está em [`docs/ardy-setup/ACERTOS-E-ERROS.md`](docs/ardy-setup/ACERTOS-E-ERROS.md).
@@ -696,10 +832,17 @@ arquivos JSON:
 - **Blender sem janela**: cada operação roda `blender --background --python blender/<script>`
   e lê o JSON que o script grava. Os scripts de entrada ficam em `blender/*.py` e a lógica em
   `blender/ponte_bl/`.
-- **Interface sem build**: `web/app.js` (as telas) e `web/viewer.js` (o visualizador, em
-  three.js), sem framework. A cada 2 s ela busca o estado inteiro em `GET /api/state` e
+- **Interface sem build**: `web/app.js` (as telas), `web/viewer.js` (o visualizador, em
+  three.js), `web/markdown.js` (a página dos documentos da gestão, montada sem passar por HTML) e
+  `web/simulador.js` (o simulador), sem framework. A cada 2 s ela busca o estado inteiro em `GET /api/state` e
   redesenha. A tela anterior é uma cópia completa em `web/antiga/`, servida em `/antiga/`.
-- **Terminal** (`ponte/terminal.py`): um PowerShell por projeto, num pseudoconsole do Windows
+- **Jogos** (`ponte/games.py`): um `game.json` por jogo em `data/games/<id>/`, com as texturas,
+  os sons e os documentos em `assets/` e as tarefas em `tarefas.json`. Os personagens e os
+  modelos 3D não moram ali: são projetos, em `data/projects/`, que dizem em `game` de que jogo
+  são e, em `role`, o que são nele. As abas da tela ficam em `tabs`, no `game.json`; cada
+  projeto, arquivo ou tarefa diz em `tab` em que aba está (sem dizer, na que vem com o jogo).
+- **Terminal** (`ponte/terminal.py`): um PowerShell por espaço (o jogo, cada personagem, cada
+  asset e a tela de entrada), aberto na pasta dele, num pseudoconsole do Windows
   (ConPTY, pelo `pywinpty`), ligado à página por WebSocket e desenhado pelo xterm.js. O
   servidor guarda o que o terminal escreveu, para reaparecer quando a página volta, e fecha os
   que ninguém usa. A rota confere a origem do pedido e a senha da vez antes de aceitar.
@@ -750,12 +893,13 @@ uv run python tests/check_close.py       # encerrar: resultado único igual às 
 uv run python tests/check_unreal.py      # Unreal 5: esqueleto do Mannequin, mesmas animações (--engine <UnrealEditor-Cmd.exe> importa de verdade)
 uv run python tests/check_migration.py   # acervo de versões antigas vai para as pastas de projeto
 uv run python tests/check_autorig.py <arquivo_do_mixamo.fbx>   # rigador × rig do próprio Mixamo
-uv run python tests/check_terminal.py    # terminal da tela: abre parado na pasta, recusa quem vem de fora, fecha sozinho (uns 2 min)
+uv run python tests/check_terminal.py    # terminal da tela: abre parado na pasta, recusa quem vem de fora, fecha sozinho (uns 3 min)
+uv run python tests/check_games.py       # jogos: personagens e assets de cada um, texturas e sons, as abas, as tarefas e os documentos, o guia da pasta, apagar
 ```
 
 | Teste | Precisa de |
 |---|---|
-| `check_rigmap.py`, `check_migration.py`, `check_fila.py` | só Python |
+| `check_rigmap.py`, `check_migration.py`, `check_fila.py`, `check_games.py` | só Python |
 | `check_terminal.py` | só Python, no Windows (sobe um servidor próprio na porta 8767) |
 | `check_retarget.py`, `check_textures.py`, `check_mixamo.py`, `check_capture.py`, `check_close.py` | Blender |
 | `check_chain.py`, `check_engine.py`, `check_ardy.py` | Blender (o gerador é trocado por um dublê) |
@@ -791,6 +935,13 @@ Da tela nova (11/10/2026):
   grande isso deu 40 MB por animação e uns 4 segundos para abrir no visor.
 - O botão do Mixamo foi provado com clique de verdade, num acervo descartável, com um FBX
   baixado do Mixamo: entrou na lista em 8 segundos, abriu sozinho e tocou, e o × o apagou.
+- O simulador é a primeira versão: anda para onde você manda, de frente (ou de lado e de
+  costas, se a animação escolhida para andar for assim). Não tem tiro, agachar, as oito
+  direções ao mesmo tempo nem pulo. Foi provado com o teclado e o clique de verdade num Edge
+  sem janela e por número: a medida do passo de um andar feito parado no lugar bateu com a do
+  Blender (0,625 m/s). Foi testado com dois conjuntos de animações (um feito no Blender e um
+  pacote do Mixamo); animações de origens diferentes no mesmo projeto podem não combinar. Cada
+  animação ainda é um arquivo inteiro: com muitas, abrir o simulador demora.
 - A tela foi conferida num Edge sem janela, com cliques de verdade e leitura do relógio do
   visor. Arrastar a divisória, soltar arquivos na janela e renomear não foram testados assim.
 - Só a rota do terminal confere de onde vem o pedido; as outras, não. O servidor escuta
@@ -798,7 +949,7 @@ Da tela nova (11/10/2026):
 
 Do resto:
 
-- Validado com o boneco de teste e com um personagem real (gerado no Tripo, esqueleto com
+- Validado com o boneco de teste e com um personagem real (gerado por IA, esqueleto com
   nomes do Mixamo). Outras convenções de ossos só foram testadas pelos nomes, não com modelos.
 - Texturas grandes pesam: cada prévia guarda um GLB e um BLEND com as texturas dentro.
 - O encerramento foi conferido com o boneco de teste (três animações e uma arma) e com uma
@@ -844,7 +995,7 @@ Do resto:
 - O rigador foi calibrado e comparado com **um** personagem rigado pelo Mixamo (juntas a
   1–3 % da altura das do Mixamo). Em corpos muito diferentes os marcadores estimados podem
   sair longe: confira-os. A tela de marcadores e o envio de ZIP ainda não foram testados.
-  Em 09/10/2026 a comparação foi refeita com dois personagens do Mixamo (Zombiegirl e Swat),
+  Em 09/10/2026 a comparação foi refeita com dois personagens rigados pelo Mixamo,
   depois de mudanças no rigador: braços a 1,0 % da altura em média e dedos a 1,3–1,5 %.
 - O ombro sai da continuação do antebraço, a um braço de distância do cotovelo: o rigador supõe
   o braço reto. Em A-pose com o cotovelo um pouco dobrado ele vai para dentro, e o que o segura
@@ -886,6 +1037,6 @@ Do resto:
 | `scripts/` | atalho de desktop, abrir e parar |
 | `docs/` | guia e scripts de instalação do Kimodo (`kimodo-setup/`), scripts e registro do ARDY (`ardy-setup/`) e as imagens deste README (`img/`) |
 | `tests/` | verificações e os BVHs de referência |
-| `data/` | o acervo local, fora do git: `projects/` (um projeto por personagem, com o guia para a IA do terminal), `resultados/` (atalhos dos encerrados), `jobs/` |
+| `data/` | o acervo local, fora do git: `games/` (um jogo por pasta, com as texturas, os sons e o guia para a IA do terminal), `projects/` (um projeto por personagem ou modelo 3D), `resultados/` (atalhos dos encerrados), `jobs/` |
 | `CLAUDE.md` | o guia de trabalho para a IA que mexe neste repositório: regras do dono, histórico e o que já deu certo e errado |
 | `ponte.toml` | configuração da máquina: caminho do Blender, geradores, porta do servidor |
